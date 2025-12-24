@@ -1,4 +1,4 @@
-# Splitwise Analysis Tool
+# SplitSense
 
 A comprehensive tool for analyzing Splitwise account data with accurate, verifiable insights.
 
