@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Splitwise Analysis Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            opacity: 0.9;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .section {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .section p {
+            color: #666;
+            margin-bottom: 1rem;
+        }
+        
+        .chart-container {
+            margin: 1rem 0;
+            min-height: 400px;
+        }
+        
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .insight-card {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .insight-card h3 {
+            color: #667eea;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .insight-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .ingest-section {
+            background: #fff3cd;
+            border: 2px dashed #ffc107;
+        }
+        
+        .ingest-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .ingest-form input {
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        
+        .ingest-form button {
+            padding: 0.75rem 1.5rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        
+        .ingest-form button:hover {
+            background: #5568d3;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Splitwise Analysis Tool</h1>
+        <p>Comprehensive insights from your Splitwise account data</p>
+    </div>
+    
+    <div class="container">
+        <div class="section ingest-section">
+            <h2>Data Ingestion</h2>
+            <div class="ingest-form">
+                <input type="text" id="apiToken" placeholder="Splitwise API Token (optional)" />
+                <input type="file" id="fileInput" accept=".csv,.json" />
+                <button onclick="ingestData()">Ingest Data</button>
+            </div>
+            <div id="ingestStatus"></div>
+        </div>
+        
+        <div id="insightsContainer" style="display: none;">
+            <div class="section">
+                <h2>Summary</h2>
+                <div class="insights-grid" id="summaryGrid"></div>
+            </div>
+            
+            <div class="section">
+                <h2>Spending Trend</h2>
+                <div class="chart-container" id="spendingTrend"></div>
+            </div>
+            
+            <div class="section">
+                <h2>Balance Trend</h2>
+                <div class="chart-container" id="balanceTrend"></div>
+            </div>
+            
+            <div class="section">
+                <h2>Category Breakdown</h2>
+                <div class="chart-container" id="categoryPie"></div>
+            </div>
+            
+            <div class="section">
+                <h2>Group Spending</h2>
+                <div class="chart-container" id="groupBar"></div>
+            </div>
+            
+            <div class="section">
+                <h2>Spending Anomalies</h2>
+                <div class="chart-container" id="anomalyChart"></div>
+            </div>
+            
+            <div class="section">
+                <h2>Recurring Expenses</h2>
+                <div class="chart-container" id="subscriptionChart"></div>
+            </div>
+            
+            <div class="section">
+                <h2>Detailed Insights</h2>
+                <div id="detailedInsights"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        async function ingestData() {
+            const statusDiv = document.getElementById('ingestStatus');
+            const token = document.getElementById('apiToken').value;
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            statusDiv.innerHTML = '<div class="loading">Ingesting data...</div>';
+            
+            try {
+                let response;
+                
+                if (file) {
+                    // File upload
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('base_currency', 'USD');
+                    
+                    response = await fetch('/api/ingest/file', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else if (token) {
+                    // API token
+                    response = await fetch('/api/ingest', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({api_token: token, base_currency: 'USD'})
+                    });
+                } else {
+                    statusDiv.innerHTML = '<div class="error">Please provide either an API token or upload a file.</div>';
+                    return;
+                }
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Ingestion failed');
+                }
+                
+                const result = await response.json();
+                statusDiv.innerHTML = `<div class="success">Data ingested successfully! ${result.expenses_count} expenses, ${result.groups_count} groups.</div>`;
+                
+                // Load insights
+                await loadInsights();
+                
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function loadInsights() {
+            try {
+                // Get insights
+                const insightsResponse = await fetch('/api/insights');
+                if (!insightsResponse.ok) {
+                    throw new Error('Failed to load insights');
+                }
+                const insights = await insightsResponse.json();
+                
+                // Get charts
+                const chartsResponse = await fetch('/api/insights/charts');
+                if (!chartsResponse.ok) {
+                    throw new Error('Failed to load charts');
+                }
+                const charts = await chartsResponse.json();
+                
+                // Display summary
+                displaySummary(insights);
+                
+                // Display charts
+                document.getElementById('spendingTrend').innerHTML = charts.spending_trend;
+                document.getElementById('balanceTrend').innerHTML = charts.balance_trend;
+                document.getElementById('categoryPie').innerHTML = charts.category_pie;
+                document.getElementById('groupBar').innerHTML = charts.group_bar;
+                document.getElementById('anomalyChart').innerHTML = charts.anomaly;
+                document.getElementById('subscriptionChart').innerHTML = charts.subscription;
+                
+                // Display detailed insights
+                displayDetailedInsights(insights);
+                
+                // Show container
+                document.getElementById('insightsContainer').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error loading insights:', error);
+            }
+        }
+        
+        function displaySummary(insights) {
+            const grid = document.getElementById('summaryGrid');
+            grid.innerHTML = `
+                <div class="insight-card">
+                    <h3>Total Spending</h3>
+                    <div class="value">${parseFloat(insights.spending.total_spending).toLocaleString('en-US', {style: 'currency', currency: insights.spending.currency_code})}</div>
+                </div>
+                <div class="insight-card">
+                    <h3>Net Balance</h3>
+                    <div class="value">${parseFloat(insights.balance.net_balance).toLocaleString('en-US', {style: 'currency', currency: insights.balance.currency_code})}</div>
+                </div>
+                <div class="insight-card">
+                    <h3>Top Category</h3>
+                    <div class="value">${insights.categories.top_categories[0]?.category || 'N/A'}</div>
+                </div>
+                <div class="insight-card">
+                    <h3>Subscriptions</h3>
+                    <div class="value">${parseFloat(insights.subscriptions.total_monthly_subscriptions).toLocaleString('en-US', {style: 'currency', currency: insights.subscriptions.currency_code})}</div>
+                </div>
+            `;
+        }
+        
+        function displayDetailedInsights(insights) {
+            const container = document.getElementById('detailedInsights');
+            container.innerHTML = `
+                <div class="section">
+                    <h3>Validation Results</h3>
+                    <p><strong>Status:</strong> ${insights.validation.is_valid ? '✓ Valid' : '✗ Invalid'}</p>
+                    <p><strong>Errors:</strong> ${insights.validation.errors.length}</p>
+                    <p><strong>Warnings:</strong> ${insights.validation.warnings.length}</p>
+                </div>
+                
+                <div class="section">
+                    <h3>Cash Flow</h3>
+                    <p>${insights.cash_flow.explanation}</p>
+                </div>
+                
+                <div class="section">
+                    <h3>Settlement Efficiency</h3>
+                    <p>${insights.settlement_efficiency.explanation}</p>
+                </div>
+                
+                <div class="section">
+                    <h3>Balance Prediction</h3>
+                    <p>${insights.balance_prediction.explanation}</p>
+                </div>
+            `;
+        }
+        
+        // Try to load insights on page load (if data already ingested)
+        window.addEventListener('load', async () => {
+            try {
+                await loadInsights();
+            } catch (e) {
+                // No data available yet, that's fine
+            }
+        });
+    </script>
+</body>
+</html>
+
