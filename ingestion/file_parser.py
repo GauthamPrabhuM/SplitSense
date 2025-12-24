@@ -87,6 +87,11 @@ class FileParser:
                         'owed_share': '0'
                     })
                 
+                # Get user ID with fallback
+                creator_id = 1  # Default
+                if paid_by and paid_by in users:
+                    creator_id = users[paid_by].get('id', 1)
+                
                 expense = Expense(
                     id=expense_id,
                     group_id=group_id,
@@ -96,7 +101,7 @@ class FileParser:
                     currency_code=currency,
                     date=date,
                     created_by=User(
-                        id=users[paid_by]['id'] if paid_by and paid_by in users else 1,
+                        id=creator_id,
                         first_name=paid_by.split()[0] if paid_by else 'Unknown',
                         last_name=''
                     ),

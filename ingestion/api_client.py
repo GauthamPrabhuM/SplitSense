@@ -43,8 +43,32 @@ class SplitwiseAPIClient:
         self._rate_limit()
         url = f"{self.BASE_URL}/{endpoint}"
         response = self.session.get(url, params=params)
-        response.raise_for_status()
-        return response.json()
+        
+        # Check if response is successful
+        if response.status_code != 200:
+            error_text = response.text[:500]  # First 500 chars
+            raise Exception(
+                f"API request failed with status {response.status_code}. "
+                f"Response: {error_text}"
+            )
+        
+        # Check if response is JSON
+        content_type = response.headers.get('content-type', '')
+        if 'application/json' not in content_type:
+            error_text = response.text[:500]
+            raise Exception(
+                f"API returned non-JSON response. Content-Type: {content_type}. "
+                f"Response: {error_text}"
+            )
+        
+        try:
+            return response.json()
+        except ValueError as e:
+            error_text = response.text[:500]
+            raise Exception(
+                f"Failed to parse JSON response. Error: {str(e)}. "
+                f"Response: {error_text}"
+            )
     
     def get_current_user(self) -> Dict[str, Any]:
         """Get current user information"""
@@ -126,12 +150,15 @@ class SplitwiseAPIClient:
         
         # Parse created_by user
         created_by_data = expense_data.get("created_by", {})
+        user_id = created_by_data.get("id")
+        if user_id is None:
+            user_id = 0  # Default fallback for missing IDs
         created_by = User(
-            id=created_by_data.get("id"),
-            first_name=created_by_data.get("first_name", ""),
-            last_name=created_by_data.get("last_name", ""),
+            id=user_id,
+            first_name=created_by_data.get("first_name", "") or "",
+            last_name=created_by_data.get("last_name", "") or "",
             email=created_by_data.get("email"),
-            picture=created_by_data.get("picture", {}).get("medium")
+            picture=created_by_data.get("picture", {}).get("medium") if created_by_data.get("picture") else None
         )
         
         # Parse date
@@ -148,8 +175,13 @@ class SplitwiseAPIClient:
                 expense_data["deleted_at"].replace("Z", "+00:00")
             )
         
+        # Ensure expense ID is valid
+        expense_id = expense_data.get("id")
+        if expense_id is None:
+            raise ValueError("Expense missing required 'id' field")
+        
         return Expense(
-            id=expense_data.get("id"),
+            id=expense_id,
             group_id=expense_data.get("group_id"),
             description=expense_data.get("description", ""),
             payment=expense_data.get("payment", False),
@@ -170,10 +202,13 @@ class SplitwiseAPIClient:
         members = []
         for member_data in group_data.get("members", []):
             user_data = member_data.get("user", {})
+            user_id = user_data.get("id")
+            if user_id is None:
+                user_id = 0  # Default fallback for missing IDs
             members.append(User(
-                id=user_data.get("id"),
-                first_name=user_data.get("first_name", ""),
-                last_name=user_data.get("last_name", ""),
+                id=user_id,
+                first_name=user_data.get("first_name", "") or "",
+                last_name=user_data.get("last_name", "") or "",
                 email=user_data.get("email"),
                 picture=user_data.get("picture", {}).get("medium") if user_data.get("picture") else None
             ))
@@ -185,10 +220,20 @@ class SplitwiseAPIClient:
         else:
             updated_at = datetime.now()
         
+        # Ensure group ID is valid
+        group_id = group_data.get("id")
+        if group_id is None:
+            raise ValueError("Group missing required 'id' field")
+        
+        # Ensure group_type is valid
+        group_type = group_data.get("group_type") or "other"
+        if not isinstance(group_type, str):
+            group_type = "other"
+        
         return Group(
-            id=group_data.get("id"),
+            id=group_id,
             name=group_data.get("name", ""),
-            group_type=group_data.get("group_type", "other"),
+            group_type=group_type,
             updated_at=updated_at,
             simplify_by_default=group_data.get("simplify_by_default", False),
             members=members

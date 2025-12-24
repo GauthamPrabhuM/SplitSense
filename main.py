@@ -188,16 +188,28 @@ async def ingest_data(request: IngestRequest):
             current_user_id = data["current_user"].get("id", 1)
             user_id = current_user_id
             
-            # Parse groups
-            for group_data in data.get("groups", []):
-                groups.append(client.parse_group(group_data))
+            # Parse groups with error handling
+            for idx, group_data in enumerate(data.get("groups", [])):
+                try:
+                    groups.append(client.parse_group(group_data))
+                except Exception as e:
+                    print(f"Warning: Failed to parse group at index {idx}: {str(e)}")
+                    continue  # Skip invalid groups
             
-            # Parse expenses
-            for expense_data in data.get("expenses", []):
-                expenses.append(client.parse_expense(expense_data))
+            # Parse expenses with error handling
+            for idx, expense_data in enumerate(data.get("expenses", [])):
+                try:
+                    expenses.append(client.parse_expense(expense_data))
+                except Exception as e:
+                    print(f"Warning: Failed to parse expense at index {idx}: {str(e)}")
+                    continue  # Skip invalid expenses
             
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"API ingestion failed: {str(e)}")
+            error_msg = str(e)
+            # Provide more helpful error messages
+            if "validation error" in error_msg.lower():
+                error_msg = f"Data validation error: {error_msg}. This may be due to missing or invalid user IDs in the API response."
+            raise HTTPException(status_code=400, detail=f"API ingestion failed: {error_msg}")
     
     # Process data
     if expenses:

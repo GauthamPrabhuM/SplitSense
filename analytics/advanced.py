@@ -5,11 +5,12 @@ Anomaly detection, subscription detection, balance prediction, friction ranking.
 from typing import Dict, List, Tuple
 from decimal import Decimal
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import statistics
 
 from models.schemas import (
     Expense,
+    Group,
     RecurringExpense,
     SettlementEfficiency,
     CashFlowInsight,
@@ -229,7 +230,28 @@ class AdvancedAnalyzer:
         for payment_exp in payment_expenses:
             # Find related expense (simplified matching)
             # In reality, would need to match by description, amount, users, etc.
-            days_since = (datetime.now() - payment_exp.date).days
+            # Ensure date is a datetime object
+            if isinstance(payment_exp.date, datetime):
+                expense_date = payment_exp.date
+            elif isinstance(payment_exp.date, str):
+                # Try to parse if it's a string
+                try:
+                    expense_date = datetime.fromisoformat(payment_exp.date.replace("Z", "+00:00"))
+                except:
+                    continue  # Skip if we can't parse
+            else:
+                continue  # Skip if date is invalid
+            
+            # Ensure both datetimes are timezone-aware for comparison
+            now = datetime.now(timezone.utc)
+            if expense_date.tzinfo is None:
+                # If expense_date is naive, assume UTC
+                expense_date = expense_date.replace(tzinfo=timezone.utc)
+            elif now.tzinfo is None:
+                # If now is naive, make it UTC-aware
+                now = datetime.now(timezone.utc)
+            
+            days_since = (now - expense_date).days
             settlement_times.append(days_since)
         
         # Calculate unpaid balances
@@ -482,7 +504,13 @@ class AdvancedAnalyzer:
                     person_friction[user_id]["unpaid_balance"] += owed_share
                     
                     # Calculate delay (simplified)
-                    days_old = (datetime.now() - expense.date).days
+                    # Ensure both datetimes are timezone-aware for comparison
+                    now = datetime.now(timezone.utc)
+                    expense_date = expense.date
+                    if expense_date.tzinfo is None:
+                        # If expense_date is naive, assume UTC
+                        expense_date = expense_date.replace(tzinfo=timezone.utc)
+                    days_old = (now - expense_date).days
                     person_friction[user_id]["delay_days"].append(days_old)
         
         # Calculate friction scores

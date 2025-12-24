@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
-from models.schemas import Expense, Group, CurrencyCode
+from models.schemas import Expense, Group, CurrencyCode, ExpenseRepayment
 
 
 class DataNormalizer:
