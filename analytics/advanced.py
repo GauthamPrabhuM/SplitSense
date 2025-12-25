@@ -470,6 +470,7 @@ class AdvancedAnalyzer:
         
         # Track friction metrics by person and group
         person_friction = defaultdict(lambda: {
+            "name": "Unknown",
             "unpaid_balance": Decimal("0"),
             "delay_days": [],
             "dispute_count": 0
@@ -484,6 +485,16 @@ class AdvancedAnalyzer:
         
         group_lookup = {g.id: g for g in groups}
         
+        # Build user name lookup from groups
+        user_name_lookup = {}
+        for group in groups:
+            for member in group.members:
+                if member.id not in user_name_lookup:
+                    first = member.first_name or ""
+                    last = member.last_name if member.last_name and member.last_name.lower() != "none" else ""
+                    full_name = f"{first} {last}".strip()
+                    user_name_lookup[member.id] = full_name if full_name else f"User {member.id}"
+        
         for expense in valid_expenses:
             group_id = expense.group_id or 0
             
@@ -495,9 +506,22 @@ class AdvancedAnalyzer:
             group_friction[group_id]["expense_count"] += 1
             
             for user_data in expense.users:
-                user_id = user_data.get("user", {}).get("id")
+                user_info = user_data.get("user", {})
+                user_id = user_info.get("id")
                 if user_id == self.current_user_id:
                     continue
+                
+                # Try to get user name from expense data or lookup
+                if user_id not in user_name_lookup:
+                    first_name = user_info.get("first_name", "") or ""
+                    last_name = user_info.get("last_name", "") or ""
+                    if last_name.lower() == "none":
+                        last_name = ""
+                    full_name = f"{first_name} {last_name}".strip()
+                    if full_name:
+                        user_name_lookup[user_id] = full_name
+                
+                person_friction[user_id]["name"] = user_name_lookup.get(user_id, f"User {user_id}")
                 
                 owed_share = Decimal(str(user_data.get("owed_share", "0")))
                 if owed_share > 0:
@@ -520,6 +544,7 @@ class AdvancedAnalyzer:
             friction_score = float(metrics["unpaid_balance"]) + (avg_delay * 10)  # Simple scoring
             by_person.append({
                 "user_id": user_id,
+                "name": metrics["name"],
                 "unpaid_balance": float(metrics["unpaid_balance"]),
                 "average_delay_days": avg_delay,
                 "friction_score": friction_score

@@ -13,7 +13,10 @@ import { Button } from '@/components/ui/button';
 
 export default function FriendsPage() {
   const { insights, isLoading } = useInsights();
-  const currency = insights?.balance?.currency_code || insights?.spending?.currency_code || 'INR';
+  
+  // Use original_currency from data_summary as that's what friction amounts are in
+  // The backend returns amounts in original currency (INR) but friction uses original amounts
+  const currency = insights?.data_summary?.original_currency || insights?.balance?.currency_code || 'INR';
   
   // Get friction data since by_person might be empty
   const frictionData = insights?.friction?.by_person;
@@ -22,7 +25,7 @@ export default function FriendsPage() {
   const friends = frictionData && Array.isArray(frictionData)
     ? frictionData.map((person) => ({
         user_id: person.user_id,
-        name: `User ${person.user_id}`,
+        name: person.name || `User ${person.user_id}`,
         balance: person.unpaid_balance,
         direction: person.unpaid_balance > 0 ? 'owed' : 'owe' as 'owed' | 'owe',
         friction_score: person.friction_score,

@@ -166,6 +166,9 @@ export interface DataSummary {
     earliest: string;
     latest: string;
   };
+  currencies: string[];
+  original_currency: string;
+  base_currency: string;
 }
 
 export interface Charts {
