@@ -74,6 +74,35 @@ class SpendingAnalyzer:
         quarterly_dict = {k: v for k, v in sorted(quarterly_spending.items())}
         yearly_dict = {k: v for k, v in sorted(yearly_spending.items())}
         
+        # Calculate peak month and amount
+        peak_month = None
+        peak_amount = None
+        if monthly_dict:
+            peak_month = max(monthly_dict, key=monthly_dict.get)
+            peak_amount = monthly_dict[peak_month]
+        
+        # Calculate monthly average
+        monthly_average = None
+        if monthly_dict:
+            monthly_average = total_spending / len(monthly_dict)
+        
+        # Calculate spending trend (compare first half to second half of data)
+        spending_trend = "stable"
+        if len(monthly_dict) >= 4:
+            sorted_months = sorted(monthly_dict.keys())
+            mid = len(sorted_months) // 2
+            first_half = sum(monthly_dict[m] for m in sorted_months[:mid])
+            second_half = sum(monthly_dict[m] for m in sorted_months[mid:])
+            
+            # Compare averages
+            first_avg = first_half / mid
+            second_avg = second_half / (len(sorted_months) - mid)
+            
+            if second_avg > first_avg * Decimal("1.1"):  # 10% increase
+                spending_trend = "increasing"
+            elif second_avg < first_avg * Decimal("0.9"):  # 10% decrease
+                spending_trend = "decreasing"
+        
         # Generate explanation
         if yearly_dict:
             latest_year = max(yearly_dict.keys())
@@ -92,6 +121,10 @@ class SpendingAnalyzer:
             monthly_breakdown=monthly_dict,
             quarterly_breakdown=quarterly_dict,
             yearly_breakdown=yearly_dict,
+            monthly_average=monthly_average,
+            peak_month=peak_month,
+            peak_amount=peak_amount,
+            spending_trend=spending_trend,
             explanation=explanation
         )
 

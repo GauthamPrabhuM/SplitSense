@@ -93,6 +93,16 @@ class Balance(BaseModel):
     currency_code: str
 
 
+class FriendBalance(BaseModel):
+    """Current balance with a friend from Splitwise API"""
+    user_id: int
+    first_name: str
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    balance: SerializableDecimal  # Positive = they owe you, Negative = you owe them
+    currency_code: str
+
+
 # Data container models
 class ExpenseData(BaseModel):
     """Container for all expense data"""
@@ -130,6 +140,10 @@ class SpendingInsight(BaseModel):
     monthly_breakdown: Dict[str, SerializableDecimal]  # "YYYY-MM" -> amount
     quarterly_breakdown: Dict[str, SerializableDecimal]  # "YYYY-Q1" -> amount
     yearly_breakdown: Dict[str, SerializableDecimal]  # "YYYY" -> amount
+    monthly_average: Optional[SerializableDecimal] = None
+    peak_month: Optional[str] = None  # "YYYY-MM" format
+    peak_amount: Optional[SerializableDecimal] = None
+    spending_trend: Optional[str] = None  # "increasing", "decreasing", "stable"
     explanation: str
 
 
@@ -139,7 +153,7 @@ class BalanceInsight(BaseModel):
     currency_code: str
     owed_to_user: SerializableDecimal
     user_owes: SerializableDecimal
-    by_person: Dict[int, SerializableDecimal]  # user_id -> net balance
+    by_person: Dict[str, SerializableDecimal]  # person_name -> net balance (positive = they owe you)
     trend_over_time: Dict[str, SerializableDecimal]  # "YYYY-MM" -> net balance
     explanation: str
 

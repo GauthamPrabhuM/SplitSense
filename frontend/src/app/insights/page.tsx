@@ -17,13 +17,27 @@ import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { BuyMeCoffee } from '@/components/buy-me-coffee';
-import { useInsights } from '@/lib/api';
+import { useInsights, useFriends } from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
 import { CardSkeleton } from '@/components/ui/skeleton';
 
 export default function InsightsPage() {
   const { insights, isLoading } = useInsights();
-  const currency = insights?.spending?.currency_code || 'USD';
+  const { friends: friendBalances } = useFriends();
+  const currency = insights?.data_summary?.original_currency || insights?.spending?.currency_code || 'INR';
+
+  // Build a lookup map from friend balances for accurate amounts
+  const balanceLookup = new Map<string, { balance: number; currency: string }>();
+  if (friendBalances) {
+    for (const friend of friendBalances) {
+      const fullName = friend.last_name 
+        ? `${friend.first_name} ${friend.last_name}`.trim()
+        : friend.first_name;
+      if (friend.balance > 0) {  // Only people who owe you
+        balanceLookup.set(fullName, { balance: friend.balance, currency: friend.currency_code });
+      }
+    }
+  }
 
   const insightCards = insights ? [
     {
@@ -33,7 +47,7 @@ export default function InsightsPage() {
       description: insights.cash_flow?.explanation || 'No cash flow data available',
       stats: [
         { label: 'Total Paid', value: formatCurrency(insights.cash_flow?.total_paid || 0, currency), positive: true },
-        { label: 'Total Share', value: formatCurrency(insights.cash_flow?.total_share || 0, currency) },
+        { label: 'Total Owed', value: formatCurrency(insights.cash_flow?.total_received || 0, currency) },
         { label: 'Net Flow', value: formatCurrency(insights.cash_flow?.net_cash_flow || 0, currency), positive: (insights.cash_flow?.net_cash_flow || 0) > 0 },
       ],
     },
@@ -54,8 +68,9 @@ export default function InsightsPage() {
       color: 'warning',
       description: insights.balance_prediction?.explanation || 'No prediction data available',
       stats: [
-        { label: '30-Day Forecast', value: formatCurrency(insights.balance_prediction?.predicted_balance_30_days || 0, currency) },
+        { label: '30-Day Forecast', value: formatCurrency(insights.balance_prediction?.predicted_balance || 0, currency) },
         { label: 'Trend', value: insights.balance_prediction?.trend || 'stable' },
+        { label: 'Confidence', value: insights.balance_prediction?.confidence_level || 'N/A' },
       ],
     },
     {
@@ -84,12 +99,21 @@ export default function InsightsPage() {
       title: 'Friction Analysis',
       icon: AlertTriangle,
       color: 'warning',
-      description: insights.friction?.explanation || 'No friction data available',
-      stats: insights.friction?.by_person?.slice(0, 3).map((p) => ({
-        label: p.name,
-        value: formatCurrency(p.unpaid_balance, currency),
-        warning: true,
-      })) || [],
+      description: 'People with unpaid balances who may need reminding',
+      stats: friendBalances
+        ?.filter(f => f.balance > 0)  // Only people who owe you
+        .sort((a, b) => b.balance - a.balance)  // Highest balance first
+        .slice(0, 3)
+        .map((f) => {
+          const fullName = f.last_name 
+            ? `${f.first_name} ${f.last_name}`.trim()
+            : f.first_name;
+          return {
+            label: fullName,
+            value: formatCurrency(f.balance, f.currency_code),
+            warning: true,
+          };
+        }) || [],
     },
   ] : [];
 

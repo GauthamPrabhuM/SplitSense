@@ -22,11 +22,12 @@ import { DataIngestion } from '@/components/dashboard/data-ingestion';
 import { CardSkeleton, ChartSkeleton, TableSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useInsights } from '@/lib/api';
+import { useInsights, useFriends } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 export default function DashboardPage() {
   const { insights, isLoading, isError, refresh } = useInsights();
+  const { friends: friendBalances } = useFriends();
   const [showIngestion, setShowIngestion] = useState(false);
 
   // Show ingestion if no data
@@ -164,10 +165,14 @@ export default function DashboardPage() {
                     {insights.balance?.by_person && Object.keys(insights.balance.by_person).length > 0 && (
                       <FriendList friends={insights.balance.by_person} currency={currency} />
                     )}
-                    {/* Show friction list if no friend balances */}
-                    {insights.friction?.by_person && insights.friction.by_person.length > 0 && (
-                      <FrictionList friction={insights.friction.by_person} currency={currency} />
-                    )}
+                    {/* Show friction list with real balances from Splitwise API */}
+                    {(friendBalances && friendBalances.length > 0) || (insights.friction?.by_person && insights.friction.by_person.length > 0) ? (
+                      <FrictionList 
+                        friction={insights.friction?.by_person || []} 
+                        currency={currency} 
+                        friendBalances={friendBalances}
+                      />
+                    ) : null}
                   </div>
                 </TabsContent>
 
@@ -222,9 +227,13 @@ export default function DashboardPage() {
                     </InsightCard>
 
                     {/* Friction Warning */}
-                    {insights.friction?.by_person && (
+                    {((friendBalances && friendBalances.length > 0) || insights.friction?.by_person) && (
                       <div className="lg:col-span-2">
-                        <FrictionList friction={insights.friction.by_person} currency={currency} />
+                        <FrictionList 
+                          friction={insights.friction?.by_person || []} 
+                          currency={currency}
+                          friendBalances={friendBalances}
+                        />
                       </div>
                     )}
                   </div>

@@ -106,7 +106,8 @@ export interface Subscription {
 export interface CashFlowInsight {
   net_cash_flow: number;
   total_paid: number;
-  total_share: number;
+  total_received: number;
+  front_pay_percentage: number;
   currency_code: string;
   explanation: string;
 }
@@ -120,9 +121,11 @@ export interface SettlementEfficiency {
 }
 
 export interface BalancePrediction {
-  predicted_balance_30_days: number;
-  trend: 'improving' | 'worsening' | 'stable';
+  predicted_balance: number;
+  trend: 'increasing' | 'decreasing' | 'stable';
   currency_code: string;
+  confidence_level: string;
+  based_on_months: number;
   explanation: string;
 }
 
