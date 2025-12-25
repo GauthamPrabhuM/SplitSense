@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Splitwise Analysis Dashboard</title>
+    <title>SplitSense - Splitwise Analytics Dashboard</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
         * {
@@ -14,25 +14,49 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #f5f7fa;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #333;
             line-height: 1.6;
+            min-height: 100vh;
         }
         
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 2rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: rgba(255, 255, 255, 0.95);
+            color: #333;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         
         .header h1 {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
+            font-size: 1.8rem;
+            margin-bottom: 0.25rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
         .header p {
-            opacity: 0.9;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .header .badge {
+            background: #667eea;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
         }
         
         .container {
@@ -43,56 +67,90 @@
         
         .section {
             background: white;
-            border-radius: 8px;
-            padding: 1.5rem;
+            border-radius: 12px;
+            padding: 2rem;
             margin-bottom: 2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .section:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
         }
         
         .section h2 {
             color: #667eea;
+            margin-bottom: 1.5rem;
+            font-size: 1.75rem;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+        
+        .section h3 {
+            color: #764ba2;
             margin-bottom: 1rem;
-            font-size: 1.5rem;
+            font-size: 1.25rem;
         }
         
         .section p {
             color: #666;
             margin-bottom: 1rem;
+            line-height: 1.8;
         }
         
         .chart-container {
-            margin: 1rem 0;
-            min-height: 400px;
+            margin: 1.5rem 0;
+            min-height: 450px;
+            background: #fafafa;
+            border-radius: 8px;
+            padding: 1rem;
         }
         
         .insights-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1rem;
-            margin: 1rem 0;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
         }
         
         .insight-card {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 6px;
-            border-left: 4px solid #667eea;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border-left: 5px solid #667eea;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .insight-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
         }
         
         .insight-card h3 {
             color: #667eea;
-            font-size: 1rem;
-            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
         }
         
         .insight-card .value {
-            font-size: 1.5rem;
+            font-size: 2rem;
             font-weight: bold;
             color: #333;
+            margin-bottom: 0.5rem;
+        }
+        
+        .insight-card .subtext {
+            font-size: 0.85rem;
+            color: #666;
         }
         
         .ingest-section {
-            background: #fff3cd;
+            background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
             border: 2px dashed #ffc107;
         }
         
@@ -103,41 +161,55 @@
         }
         
         .ingest-form input {
-            padding: 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 1rem;
+            border: 2px solid #ddd;
+            border-radius: 8px;
             font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+        
+        .ingest-form input:focus {
+            outline: none;
+            border-color: #667eea;
         }
         
         .ingest-form button {
-            padding: 0.75rem 1.5rem;
-            background: #667eea;
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 1rem;
             font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
         
         .ingest-form button:hover {
-            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .ingest-form button:active {
+            transform: translateY(0);
         }
         
         .error {
             background: #f8d7da;
             color: #721c24;
             padding: 1rem;
-            border-radius: 4px;
+            border-radius: 8px;
             margin: 1rem 0;
+            border-left: 4px solid #dc3545;
         }
         
         .success {
             background: #d4edda;
             color: #155724;
             padding: 1rem;
-            border-radius: 4px;
+            border-radius: 8px;
             margin: 1rem 0;
+            border-left: 4px solid #28a745;
         }
         
         .loading {
@@ -145,82 +217,163 @@
             padding: 2rem;
             color: #666;
         }
+        
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+        
+        .data-info {
+            background: #e7f3ff;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #2196F3;
+        }
+        
+        .data-info strong {
+            color: #1976D2;
+        }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .stat-item .number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-item .label {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+        
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>Splitwise Analysis Tool</h1>
-        <p>Comprehensive insights from your Splitwise account data</p>
+        <div class="header-content">
+            <div>
+                <h1>💰 SplitSense</h1>
+                <p>Comprehensive Splitwise Analytics & Insights</p>
+            </div>
+            <div class="badge">Real Data • Live Analysis</div>
+        </div>
     </div>
     
     <div class="container">
         <div class="section ingest-section">
-            <h2>Data Ingestion</h2>
+            <h2>📥 Data Ingestion</h2>
             <div class="ingest-form">
-                <input type="text" id="apiToken" placeholder="Splitwise API Token (optional)" />
+                <input type="text" id="apiToken" placeholder="Splitwise API Token (get from https://secure.splitwise.com/apps)" />
                 <input type="file" id="fileInput" accept=".csv,.json" />
-                <button onclick="ingestData()">Ingest Data</button>
+                <button onclick="ingestData()">🚀 Ingest Data</button>
             </div>
             <div id="ingestStatus"></div>
         </div>
         
         <div id="insightsContainer" style="display: none;">
             <div class="section">
-                <h2>Summary</h2>
+                <h2>📊 Summary Dashboard</h2>
+                <div id="dataInfo" class="data-info"></div>
                 <div class="insights-grid" id="summaryGrid"></div>
             </div>
             
             <div class="section">
-                <h2>Spending Trend</h2>
-                <div class="chart-container" id="spendingTrend"></div>
+                <h2>📈 Spending Trend Over Time</h2>
+                <div class="chart-container" id="spendingTrend">
+                    <div class="loading">Loading chart</div>
+                </div>
             </div>
             
             <div class="section">
-                <h2>Balance Trend</h2>
-                <div class="chart-container" id="balanceTrend"></div>
+                <h2>⚖️ Net Balance Trend</h2>
+                <div class="chart-container" id="balanceTrend">
+                    <div class="loading">Loading chart</div>
+                </div>
             </div>
             
             <div class="section">
-                <h2>Category Breakdown</h2>
-                <div class="chart-container" id="categoryPie"></div>
+                <h2>🏷️ Category Breakdown</h2>
+                <div class="chart-container" id="categoryPie">
+                    <div class="loading">Loading chart</div>
+                </div>
             </div>
             
             <div class="section">
-                <h2>Group Spending</h2>
-                <div class="chart-container" id="groupBar"></div>
+                <h2>👥 Group Spending</h2>
+                <div class="chart-container" id="groupBar">
+                    <div class="loading">Loading chart</div>
+                </div>
             </div>
             
             <div class="section">
-                <h2>Spending Anomalies</h2>
-                <div class="chart-container" id="anomalyChart"></div>
+                <h2>🔍 Spending Anomalies</h2>
+                <div class="chart-container" id="anomalyChart">
+                    <div class="loading">Loading chart</div>
+                </div>
             </div>
             
             <div class="section">
-                <h2>Recurring Expenses</h2>
-                <div class="chart-container" id="subscriptionChart"></div>
+                <h2>🔄 Recurring Expenses & Subscriptions</h2>
+                <div class="chart-container" id="subscriptionChart">
+                    <div class="loading">Loading chart</div>
+                </div>
             </div>
             
             <div class="section">
-                <h2>Detailed Insights</h2>
+                <h2>💡 Detailed Insights</h2>
                 <div id="detailedInsights"></div>
             </div>
         </div>
     </div>
     
     <script>
+        let chartInstances = {};
+        
         async function ingestData() {
             const statusDiv = document.getElementById('ingestStatus');
             const token = document.getElementById('apiToken').value;
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
             
-            statusDiv.innerHTML = '<div class="loading">Ingesting data...</div>';
+            statusDiv.innerHTML = '<div class="loading">Ingesting data from Splitwise API</div>';
             
             try {
                 let response;
                 
                 if (file) {
-                    // File upload
                     const formData = new FormData();
                     formData.append('file', file);
                     formData.append('base_currency', 'USD');
@@ -230,14 +383,13 @@
                         body: formData
                     });
                 } else if (token) {
-                    // API token
                     response = await fetch('/api/ingest', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({api_token: token, base_currency: 'USD'})
                     });
                 } else {
-                    statusDiv.innerHTML = '<div class="error">Please provide either an API token or upload a file.</div>';
+                    statusDiv.innerHTML = '<div class="error">⚠️ Please provide either an API token or upload a file.</div>';
                     return;
                 }
                 
@@ -247,104 +399,214 @@
                 }
                 
                 const result = await response.json();
-                statusDiv.innerHTML = `<div class="success">Data ingested successfully! ${result.expenses_count} expenses, ${result.groups_count} groups.</div>`;
+                statusDiv.innerHTML = `<div class="success">✅ Data ingested successfully! Processed ${result.expenses_count} expenses across ${result.groups_count} groups.</div>`;
                 
-                // Load insights
                 await loadInsights();
                 
             } catch (error) {
-                statusDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                statusDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                console.error('Ingestion error:', error);
             }
         }
         
         async function loadInsights() {
             try {
-                // Get insights
                 const insightsResponse = await fetch('/api/insights');
                 if (!insightsResponse.ok) {
                     throw new Error('Failed to load insights');
                 }
                 const insights = await insightsResponse.json();
                 
-                // Get charts
                 const chartsResponse = await fetch('/api/insights/charts');
                 if (!chartsResponse.ok) {
                     throw new Error('Failed to load charts');
                 }
                 const charts = await chartsResponse.json();
                 
-                // Display summary
+                displayDataInfo(insights);
                 displaySummary(insights);
-                
-                // Display charts
-                document.getElementById('spendingTrend').innerHTML = charts.spending_trend;
-                document.getElementById('balanceTrend').innerHTML = charts.balance_trend;
-                document.getElementById('categoryPie').innerHTML = charts.category_pie;
-                document.getElementById('groupBar').innerHTML = charts.group_bar;
-                document.getElementById('anomalyChart').innerHTML = charts.anomaly;
-                document.getElementById('subscriptionChart').innerHTML = charts.subscription;
-                
-                // Display detailed insights
+                renderCharts(charts, insights);
                 displayDetailedInsights(insights);
                 
-                // Show container
                 document.getElementById('insightsContainer').style.display = 'block';
                 
             } catch (error) {
                 console.error('Error loading insights:', error);
+                document.getElementById('insightsContainer').innerHTML = 
+                    `<div class="section"><div class="error">Failed to load insights: ${error.message}</div></div>`;
             }
+        }
+        
+        function displayDataInfo(insights) {
+            const infoDiv = document.getElementById('dataInfo');
+            const summary = insights.data_summary || {};
+            const currency = insights.spending?.currency_code || 'USD';
+            
+            infoDiv.innerHTML = `
+                <strong>📋 Data Summary:</strong> 
+                ${summary.total_expenses || 0} expenses • 
+                ${summary.total_groups || 0} groups • 
+                Currency: <strong>${currency}</strong> • 
+                Date Range: ${summary.date_range?.earliest ? new Date(summary.date_range.earliest).toLocaleDateString() : 'N/A'} - 
+                ${summary.date_range?.latest ? new Date(summary.date_range.latest).toLocaleDateString() : 'N/A'}
+            `;
         }
         
         function displaySummary(insights) {
             const grid = document.getElementById('summaryGrid');
+            const currency = insights.spending?.currency_code || 'USD';
+            
             grid.innerHTML = `
                 <div class="insight-card">
                     <h3>Total Spending</h3>
-                    <div class="value">${parseFloat(insights.spending.total_spending).toLocaleString('en-US', {style: 'currency', currency: insights.spending.currency_code})}</div>
+                    <div class="value">${formatCurrency(insights.spending?.total_spending || 0, currency)}</div>
+                    <div class="subtext">Across all time</div>
                 </div>
                 <div class="insight-card">
                     <h3>Net Balance</h3>
-                    <div class="value">${parseFloat(insights.balance.net_balance).toLocaleString('en-US', {style: 'currency', currency: insights.balance.currency_code})}</div>
+                    <div class="value" style="color: ${(insights.balance?.net_balance || 0) >= 0 ? '#28a745' : '#dc3545'}">
+                        ${formatCurrency(insights.balance?.net_balance || 0, currency)}
+                    </div>
+                    <div class="subtext">${(insights.balance?.net_balance || 0) >= 0 ? 'You are owed' : 'You owe'}</div>
                 </div>
                 <div class="insight-card">
                     <h3>Top Category</h3>
-                    <div class="value">${insights.categories.top_categories[0]?.category || 'N/A'}</div>
+                    <div class="value">${insights.categories?.top_categories?.[0]?.category || 'N/A'}</div>
+                    <div class="subtext">${insights.categories?.top_categories?.[0] ? formatCurrency(insights.categories.top_categories[0].amount, currency) + ' (' + insights.categories.top_categories[0].percentage.toFixed(1) + '%)' : ''}</div>
                 </div>
                 <div class="insight-card">
-                    <h3>Subscriptions</h3>
-                    <div class="value">${parseFloat(insights.subscriptions.total_monthly_subscriptions).toLocaleString('en-US', {style: 'currency', currency: insights.subscriptions.currency_code})}</div>
+                    <h3>Monthly Subscriptions</h3>
+                    <div class="value">${formatCurrency(insights.subscriptions?.total_monthly_subscriptions || 0, currency)}</div>
+                    <div class="subtext">${insights.subscriptions?.subscriptions?.length || 0} recurring patterns</div>
+                </div>
+                <div class="insight-card">
+                    <h3>Cash Flow</h3>
+                    <div class="value" style="color: ${(insights.cash_flow?.net_cash_flow || 0) >= 0 ? '#28a745' : '#dc3545'}">
+                        ${formatCurrency(Math.abs(insights.cash_flow?.net_cash_flow || 0), currency)}
+                    </div>
+                    <div class="subtext">${(insights.cash_flow?.net_cash_flow || 0) >= 0 ? 'Net Payer' : 'Net Receiver'}</div>
+                </div>
+                <div class="insight-card">
+                    <h3>Unpaid Balances</h3>
+                    <div class="value">${insights.settlement_efficiency?.unpaid_balances_count || 0}</div>
+                    <div class="subtext">${formatCurrency(insights.settlement_efficiency?.unpaid_balances_total || 0, currency)}</div>
                 </div>
             `;
+        }
+        
+        function formatCurrency(amount, currency) {
+            const num = parseFloat(amount);
+            if (isNaN(num)) return '0.00';
+            
+            // Use Intl.NumberFormat for proper currency formatting
+            try {
+                return new Intl.NumberFormat('en-IN', {
+                    style: 'currency',
+                    currency: currency,
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(num);
+            } catch (e) {
+                // Fallback for unsupported currencies
+                return num.toLocaleString('en-IN', {maximumFractionDigits: 0}) + ' ' + currency;
+            }
+        }
+        
+        function renderCharts(charts, insights) {
+            // Render each chart - Plotly HTML includes everything needed
+            const chartMapping = {
+                'spendingTrend': charts.spending_trend,
+                'balanceTrend': charts.balance_trend,
+                'categoryPie': charts.category_pie,
+                'groupBar': charts.group_bar,
+                'anomalyChart': charts.anomaly,
+                'subscriptionChart': charts.subscription
+            };
+            
+            Object.keys(chartMapping).forEach(chartId => {
+                const container = document.getElementById(chartId);
+                const chartHtml = chartMapping[chartId];
+                
+                if (!chartHtml || chartHtml.includes('No data') || chartHtml.includes('empty-state')) {
+                    container.innerHTML = chartHtml || `<div class="empty-state"><p>No data available for this chart</p></div>`;
+                    return;
+                }
+                
+                // Insert the HTML
+                container.innerHTML = chartHtml;
+                
+                // Execute any script tags that were inserted (innerHTML doesn't auto-execute scripts)
+                const scripts = container.querySelectorAll('script');
+                scripts.forEach(script => {
+                    const newScript = document.createElement('script');
+                    if (script.src) {
+                        newScript.src = script.src;
+                    } else {
+                        newScript.textContent = script.textContent;
+                    }
+                    document.head.appendChild(newScript);
+                    document.head.removeChild(newScript);
+                });
+            });
         }
         
         function displayDetailedInsights(insights) {
             const container = document.getElementById('detailedInsights');
+            const currency = insights.spending?.currency_code || 'USD';
+            
             container.innerHTML = `
-                <div class="section">
-                    <h3>Validation Results</h3>
-                    <p><strong>Status:</strong> ${insights.validation.is_valid ? '✓ Valid' : '✗ Invalid'}</p>
-                    <p><strong>Errors:</strong> ${insights.validation.errors.length}</p>
-                    <p><strong>Warnings:</strong> ${insights.validation.warnings.length}</p>
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <div class="number">${insights.validation?.is_valid ? '✓' : '✗'}</div>
+                        <div class="label">Validation Status</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="number">${insights.validation?.errors?.length || 0}</div>
+                        <div class="label">Errors</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="number">${insights.validation?.warnings?.length || 0}</div>
+                        <div class="label">Warnings</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="number">${insights.data_summary?.total_expenses || 0}</div>
+                        <div class="label">Total Expenses</div>
+                    </div>
                 </div>
                 
-                <div class="section">
-                    <h3>Cash Flow</h3>
-                    <p>${insights.cash_flow.explanation}</p>
+                <div style="margin-top: 2rem;">
+                    <h3>💰 Cash Flow Analysis</h3>
+                    <p>${insights.cash_flow?.explanation || 'No data available'}</p>
                 </div>
                 
-                <div class="section">
-                    <h3>Settlement Efficiency</h3>
-                    <p>${insights.settlement_efficiency.explanation}</p>
+                <div style="margin-top: 1.5rem;">
+                    <h3>⏱️ Settlement Efficiency</h3>
+                    <p>${insights.settlement_efficiency?.explanation || 'No data available'}</p>
                 </div>
                 
-                <div class="section">
-                    <h3>Balance Prediction</h3>
-                    <p>${insights.balance_prediction.explanation}</p>
+                <div style="margin-top: 1.5rem;">
+                    <h3>🔮 Balance Prediction</h3>
+                    <p>${insights.balance_prediction?.explanation || 'No data available'}</p>
                 </div>
+                
+                ${insights.friction?.by_person?.length > 0 ? `
+                <div style="margin-top: 1.5rem;">
+                    <h3>⚠️ Financial Friction Ranking</h3>
+                    <p>${insights.friction?.explanation || 'No data available'}</p>
+                    <div style="margin-top: 1rem;">
+                        <strong>Top 5 by Friction:</strong>
+                        <ul style="margin-top: 0.5rem; margin-left: 2rem;">
+                            ${insights.friction.by_person.slice(0, 5).map((p, i) => 
+                                `<li>${i+1}. User ${p.user_id}: ${formatCurrency(p.unpaid_balance, currency)} (Avg delay: ${p.average_delay_days?.toFixed(1) || 0} days)</li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                </div>
+                ` : ''}
             `;
         }
         
-        // Try to load insights on page load (if data already ingested)
+        // Try to load insights on page load
         window.addEventListener('load', async () => {
             try {
                 await loadInsights();
@@ -355,4 +617,3 @@
     </script>
 </body>
 </html>
-
