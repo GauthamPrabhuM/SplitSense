@@ -36,6 +36,7 @@ current_data: Optional[AllInsights] = None
 current_expenses: list[Expense] = []
 current_groups: list[Group] = []
 current_user_id: Optional[int] = None
+current_friend_balances: list[dict] = []  # Friend balances from Splitwise API
 
 
 class IngestRequest(BaseModel):
@@ -132,6 +133,11 @@ def process_data(
         spending.monthly_breakdown = {k: float(v * conversion_rate) for k, v in spending.monthly_breakdown.items()}
         spending.quarterly_breakdown = {k: float(v * conversion_rate) for k, v in spending.quarterly_breakdown.items()}
         spending.yearly_breakdown = {k: float(v * conversion_rate) for k, v in spending.yearly_breakdown.items()}
+        # Convert the new spending fields
+        if spending.monthly_average is not None:
+            spending.monthly_average = spending.monthly_average * conversion_rate
+        if spending.peak_amount is not None:
+            spending.peak_amount = spending.peak_amount * conversion_rate
         
         # Update balance insight
         balance.net_balance = balance.net_balance * conversion_rate
@@ -139,6 +145,8 @@ def process_data(
         balance.owed_to_user = balance.owed_to_user * conversion_rate
         balance.user_owes = balance.user_owes * conversion_rate
         balance.trend_over_time = {k: float(v * conversion_rate) for k, v in balance.trend_over_time.items()}
+        # Convert per-person balances
+        balance.by_person = {k: float(v * conversion_rate) for k, v in balance.by_person.items()}
         
         # Update category insight
         categories.currency_code = original_currency
@@ -173,6 +181,29 @@ def process_data(
         # Update balance prediction
         prediction.currency_code = original_currency
         prediction.predicted_balance = prediction.predicted_balance * conversion_rate
+        
+        # Update anomalies - convert amounts and regenerate reason strings
+        for anomaly in anomalies.anomalies:
+            # Parse the original threshold from reason string and convert
+            old_amount = anomaly['amount']
+            anomaly['amount'] = float(old_amount) * float(conversion_rate)
+            # Update the reason string with converted values
+            if 'reason' in anomaly and 'exceeds threshold' in anomaly['reason']:
+                # Extract and convert threshold from reason
+                import re
+                match = re.search(r'threshold \(([0-9,.]+)\)', anomaly['reason'])
+                if match:
+                    old_threshold = float(match.group(1).replace(',', ''))
+                    new_threshold = old_threshold * float(conversion_rate)
+                    anomaly['reason'] = f"Amount ({anomaly['amount']:,.2f}) exceeds threshold ({new_threshold:,.2f})"
+        
+        # Update friction - convert unpaid_balance for each person
+        for person in friction.by_person:
+            person['unpaid_balance'] = float(person['unpaid_balance']) * float(conversion_rate)
+            person['friction_score'] = float(person['friction_score']) * float(conversion_rate)
+        for group in friction.by_group:
+            group['unpaid_balance'] = float(group['unpaid_balance']) * float(conversion_rate)
+            group['friction_score'] = float(group['friction_score']) * float(conversion_rate)
     else:
         # If already in original currency, just update currency codes
         spending.currency_code = original_currency
@@ -252,11 +283,12 @@ async def ingest_data(request: IngestRequest):
     - API token (via request body)
     - File upload (via multipart form)
     """
-    global current_data, current_expenses, current_groups, current_user_id
+    global current_data, current_expenses, current_groups, current_user_id, current_friend_balances
     
     expenses = []
     groups = []
     user_id = None
+    friend_balances = []
     
     # Try API token first
     if request.api_token:
@@ -271,6 +303,27 @@ async def ingest_data(request: IngestRequest):
             # Parse data
             current_user_id = data["current_user"].get("id", 1)
             user_id = current_user_id
+            
+            # Fetch friend balances directly from Splitwise API
+            try:
+                friends_data = client.get_friends()
+                for friend in friends_data:
+                    # Each friend has a 'balance' array with currency-specific balances
+                    balances = friend.get("balance", [])
+                    for bal in balances:
+                        amount = float(bal.get("amount", 0))
+                        if amount != 0:  # Only include non-zero balances
+                            friend_balances.append({
+                                "user_id": friend.get("id"),
+                                "first_name": friend.get("first_name", ""),
+                                "last_name": friend.get("last_name", ""),
+                                "email": friend.get("email"),
+                                "balance": amount,  # Positive = they owe you
+                                "currency_code": bal.get("currency_code", "USD")
+                            })
+                print(f"Fetched {len(friend_balances)} friend balances")
+            except Exception as e:
+                print(f"Warning: Failed to fetch friend balances: {str(e)}")
             
             # Parse groups with error handling
             for idx, group_data in enumerate(data.get("groups", [])):
@@ -300,6 +353,7 @@ async def ingest_data(request: IngestRequest):
         current_expenses = expenses
         current_groups = groups
         current_user_id = user_id or 1
+        current_friend_balances = friend_balances  # Store friend balances
         
         insights = process_data(
             expenses,
@@ -314,6 +368,7 @@ async def ingest_data(request: IngestRequest):
             "expenses_count": len(expenses),
             "groups_count": len(groups),
             "current_user_id": current_user_id,
+            "friend_balances_count": len(friend_balances),
         }
     else:
         raise HTTPException(status_code=400, detail="No data ingested. Provide API token or upload file.")
@@ -405,6 +460,15 @@ async def get_insights():
         raise HTTPException(status_code=404, detail="No data available. Please ingest data first.")
     
     return current_data.model_dump()
+
+
+@app.get("/api/friends")
+async def get_friends():
+    """Get friend balances from Splitwise API (accurate current balances)"""
+    if not current_friend_balances:
+        raise HTTPException(status_code=404, detail="No friend data available. Please ingest data first.")
+    
+    return {"friends": current_friend_balances}
 
 
 @app.get("/api/insights/charts")

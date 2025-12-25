@@ -6,32 +6,32 @@ import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { BuyMeCoffee } from '@/components/buy-me-coffee';
-import { useInsights } from '@/lib/api';
+import { useFriends, useInsights } from '@/lib/api';
 import { formatCurrency, cn, getBalanceColor, getInitials } from '@/lib/utils';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
 export default function FriendsPage() {
-  const { insights, isLoading } = useInsights();
+  const { friends: friendBalances, isLoading } = useFriends();
+  const { insights } = useInsights();
   
-  // Use original_currency from data_summary as that's what friction amounts are in
-  // The backend returns amounts in original currency (INR) but friction uses original amounts
-  const currency = insights?.data_summary?.original_currency || insights?.balance?.currency_code || 'INR';
+  // Get the currency from insights (for display consistency)
+  const defaultCurrency = insights?.data_summary?.original_currency || 'INR';
   
-  // Get friction data since by_person might be empty
-  const frictionData = insights?.friction?.by_person;
-  
-  // Convert friction data to friends format (has more data including user balances)
-  const friends = frictionData && Array.isArray(frictionData)
-    ? frictionData.map((person) => ({
-        user_id: person.user_id,
-        name: person.name || `User ${person.user_id}`,
-        balance: person.unpaid_balance,
-        direction: person.unpaid_balance > 0 ? 'owed' : 'owe' as 'owed' | 'owe',
-        friction_score: person.friction_score,
-        average_delay_days: person.average_delay_days,
-      }))
-    : [];
+  // Convert friend balances to display format
+  // Splitwise API returns: positive = they owe you, negative = you owe them
+  const friends = friendBalances.map((friend) => {
+    const fullName = friend.last_name 
+      ? `${friend.first_name} ${friend.last_name}`.trim()
+      : friend.first_name;
+    return {
+      user_id: friend.user_id,
+      name: fullName,
+      balance: friend.balance,
+      currency: friend.currency_code || defaultCurrency,
+      direction: friend.balance > 0 ? 'owed' : 'owe' as 'owed' | 'owe',
+    };
+  });
 
   // Sort by absolute balance
   const sortedFriends = [...friends].sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
@@ -96,7 +96,7 @@ export default function FriendsPage() {
                         <TrendingDown className="h-5 w-5 text-destructive" />
                       )}
                       <span className={cn('text-xl font-bold', getBalanceColor(friend.balance))}>
-                        {formatCurrency(Math.abs(friend.balance), currency)}
+                        {formatCurrency(Math.abs(friend.balance), friend.currency)}
                       </span>
                     </div>
 

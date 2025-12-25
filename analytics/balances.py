@@ -32,45 +32,87 @@ class BalanceAnalyzer:
         Returns:
             BalanceInsight with balance breakdowns
         """
-        # Filter valid expenses
-        valid_expenses = [
-            e for e in expenses
-            if not e.deleted_at and not e.payment
-        ]
+        # Separate expenses and settlements
+        valid_expenses = [e for e in expenses if not e.deleted_at and not e.payment]
+        settlements = [e for e in expenses if not e.deleted_at and e.payment]
         
         # Calculate balances
         net_balance = Decimal("0")
         owed_to_user = Decimal("0")
         user_owes = Decimal("0")
-        by_person = defaultdict(Decimal)
+        by_person_id = defaultdict(Decimal)  # user_id -> net balance (positive = they owe you)
         trend_over_time = defaultdict(Decimal)
         
         currency_code = "USD"
         
-        for expense in valid_expenses:
+        # Build user name lookup from all expenses
+        user_name_lookup = {}
+        for expense in expenses:
+            if expense.deleted_at:
+                continue
             for user_data in expense.users:
-                user_id = user_data.get("user", {}).get("id")
-                if user_id != self.current_user_id:
-                    continue
+                user_info = user_data.get("user", {})
+                user_id = user_info.get("id")
+                if user_id and user_id not in user_name_lookup:
+                    first_name = user_info.get("first_name", "")
+                    last_name = user_info.get("last_name", "")
+                    if last_name and last_name != "None":
+                        full_name = f"{first_name} {last_name}".strip()
+                    else:
+                        full_name = first_name.strip()
+                    if full_name:
+                        user_name_lookup[user_id] = full_name
+        
+        # Process each expense using repayments
+        # Repayments explicitly tell us: from_user owes to_user the amount
+        for expense in valid_expenses:
+            currency_code = expense.currency_code
+            month_key = expense.date.strftime("%Y-%m")
+            
+            for repayment in expense.repayments:
+                from_user = repayment.from_user
+                to_user = repayment.to_user
+                amount = repayment.amount
                 
-                paid_share = Decimal(str(user_data.get("paid_share", "0")))
-                owed_share = Decimal(str(user_data.get("owed_share", "0")))
-                currency_code = expense.currency_code
+                if to_user == self.current_user_id:
+                    # Someone owes ME money
+                    by_person_id[from_user] += amount
+                    net_balance += amount
+                    owed_to_user += amount
+                    trend_over_time[month_key] += amount
+                elif from_user == self.current_user_id:
+                    # I owe someone money
+                    by_person_id[to_user] -= amount
+                    net_balance -= amount
+                    user_owes += amount
+                    trend_over_time[month_key] -= amount
+        
+        # Process settlements (payments reduce debt)
+        for settlement in settlements:
+            month_key = settlement.date.strftime("%Y-%m")
+            
+            for repayment in settlement.repayments:
+                from_user = repayment.from_user
+                to_user = repayment.to_user
+                amount = repayment.amount
                 
-                # Balance = paid - owed
-                balance_change = paid_share - owed_share
-                net_balance += balance_change
-                
-                # Track by person (simplified - would need to track all users in expense)
-                # For now, we'll track net per expense
-                if balance_change > 0:
-                    owed_to_user += balance_change
-                else:
-                    user_owes += abs(balance_change)
-                
-                # Track trend over time
-                month_key = expense.date.strftime("%Y-%m")
-                trend_over_time[month_key] += balance_change
+                if from_user == self.current_user_id:
+                    # I paid someone (reduces what I owe them)
+                    by_person_id[to_user] += amount
+                    net_balance += amount
+                    trend_over_time[month_key] += amount
+                elif to_user == self.current_user_id:
+                    # Someone paid me (reduces what they owe me)
+                    by_person_id[from_user] -= amount
+                    net_balance -= amount
+                    trend_over_time[month_key] -= amount
+        
+        # Convert by_person_id to by_person with names
+        by_person = {}
+        for user_id, balance in by_person_id.items():
+            if balance != 0:  # Only include non-zero balances
+                person_name = user_name_lookup.get(user_id, f"User {user_id}")
+                by_person[person_name] = balance
         
         # Calculate cumulative trend
         sorted_months = sorted(trend_over_time.keys())

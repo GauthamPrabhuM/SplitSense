@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Users, User, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 import { cn, formatCurrency, getBalanceColor, getInitials } from '@/lib/utils';
 import type { GroupBreakdown, PersonBalance, FrictionPerson, TopGroup } from '@/types/api';
+import type { FriendBalance } from '@/lib/api';
 
 interface GroupListProps {
   groups: TopGroup[] | GroupBreakdown[];
@@ -177,9 +178,64 @@ export function FriendList({ friends, currency }: FriendListProps) {
 interface FrictionListProps {
   friction: FrictionPerson[];
   currency: string;
+  friendBalances?: FriendBalance[];  // Optional real balances from Splitwise API
 }
 
-export function FrictionList({ friction, currency }: FrictionListProps) {
+export function FrictionList({ friction, currency, friendBalances }: FrictionListProps) {
+  // If we have real friend balances from Splitwise API, use them exclusively
+  // They are the source of truth for who owes money
+  if (friendBalances && friendBalances.length > 0) {
+    // Filter to only people who owe you (positive balance)
+    const peopleWhoOweYou = friendBalances
+      .filter(friend => friend.balance > 0)
+      .sort((a, b) => b.balance - a.balance);  // Highest balance first
+
+    if (peopleWhoOweYou.length === 0) return null;
+
+    return (
+      <div className="rounded-xl border border-warning/30 bg-warning/5">
+        <div className="flex items-center gap-2 border-b border-warning/30 p-4">
+          <AlertCircle className="h-5 w-5 text-warning" />
+          <h3 className="font-semibold">Settlement Friction</h3>
+        </div>
+        <div className="p-4 space-y-4">
+          <p className="text-sm text-muted-foreground">
+            These people have unpaid balances and may need a reminder.
+          </p>
+          <div className="space-y-3">
+            {peopleWhoOweYou.slice(0, 5).map((friend, index) => {
+              const fullName = friend.last_name 
+                ? `${friend.first_name} ${friend.last_name}`.trim()
+                : friend.first_name;
+              return (
+                <div
+                  key={friend.user_id}
+                  className="flex items-center justify-between rounded-lg bg-card p-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-warning/20 text-xs font-medium text-warning">
+                      {index + 1}
+                    </span>
+                    <span className="font-medium">{fullName}</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-warning">
+                      {formatCurrency(friend.balance, friend.currency_code)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      owes you
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback to calculated friction data if no friend balances available
   if (friction.length === 0) return null;
 
   return (
@@ -193,7 +249,7 @@ export function FrictionList({ friction, currency }: FrictionListProps) {
           These people have unpaid balances and may need a reminder.
         </p>
         <div className="space-y-3">
-          {friction.slice(0, 5).map((person, index) => (
+          {friction.filter(p => p.unpaid_balance > 0).slice(0, 5).map((person, index) => (
             <div
               key={person.user_id}
               className="flex items-center justify-between rounded-lg bg-card p-3"

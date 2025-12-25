@@ -138,6 +138,9 @@ class SplitwiseAPIClient:
         # Parse users
         users_data = expense_data.get("users", [])
         
+        # Get expense currency - repayments use the same currency as the expense
+        expense_currency = expense_data.get("currency_code", "USD")
+        
         # Parse repayments
         repayments = []
         for repayment_data in expense_data.get("repayments", []):
@@ -145,7 +148,7 @@ class SplitwiseAPIClient:
                 from_user=repayment_data["from"],
                 to_user=repayment_data["to"],
                 amount=Decimal(str(repayment_data["amount"])),
-                currency_code=repayment_data.get("currency_code", "USD")
+                currency_code=expense_currency  # Use expense currency, not default USD
             ))
         
         # Parse created_by user
