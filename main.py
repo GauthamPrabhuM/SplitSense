@@ -56,6 +56,24 @@ def process_data(
     base_currency: str = "USD"
 ) -> AllInsights:
     """Process data and generate all insights"""
+    # Detect original currency from RAW expenses BEFORE normalization
+    # This ensures we show the actual currency from Splitwise API, not normalized USD
+    from collections import Counter
+    if expenses:
+        # Get currency from raw expenses (before normalization)
+        # These expenses still have their original currency_code from Splitwise
+        currency_counts = Counter(e.currency_code for e in expenses if not e.deleted_at and e.currency_code)
+        if currency_counts:
+            original_currency = currency_counts.most_common(1)[0][0]
+            print(f"Detected original currency: {original_currency} (from {currency_counts[original_currency]} expenses)")
+        else:
+            # Fallback: try to get from first expense
+            original_currency = expenses[0].currency_code if expenses and expenses[0].currency_code else base_currency
+    else:
+        original_currency = base_currency
+    
+    print(f"Using currency: {original_currency} (base: {base_currency})")
+    
     # Normalize data
     normalizer = DataNormalizer(base_currency=base_currency)
     normalized_expenses = normalizer.normalize_expenses(expenses)
@@ -98,7 +116,73 @@ def process_data(
             "latest": max((e.date for e in normalized_expenses), default=None),
         },
         "currencies": list(set(e.currency_code for e in normalized_expenses)),
+        "original_currency": original_currency,
+        "base_currency": base_currency,
     }
+    
+    # ALWAYS use original currency for display (don't normalize to USD)
+    # Only normalize internally for calculations, but display in original currency
+    if original_currency != base_currency and original_currency in normalizer.EXCHANGE_RATES:
+        # Convert back to original currency for display
+        conversion_rate = normalizer.EXCHANGE_RATES[base_currency] / normalizer.EXCHANGE_RATES[original_currency]
+        
+        # Update spending insight - convert back to original currency
+        spending.total_spending = spending.total_spending * conversion_rate
+        spending.currency_code = original_currency
+        spending.monthly_breakdown = {k: float(v * conversion_rate) for k, v in spending.monthly_breakdown.items()}
+        spending.quarterly_breakdown = {k: float(v * conversion_rate) for k, v in spending.quarterly_breakdown.items()}
+        spending.yearly_breakdown = {k: float(v * conversion_rate) for k, v in spending.yearly_breakdown.items()}
+        
+        # Update balance insight
+        balance.net_balance = balance.net_balance * conversion_rate
+        balance.currency_code = original_currency
+        balance.owed_to_user = balance.owed_to_user * conversion_rate
+        balance.user_owes = balance.user_owes * conversion_rate
+        balance.trend_over_time = {k: float(v * conversion_rate) for k, v in balance.trend_over_time.items()}
+        
+        # Update category insight
+        categories.currency_code = original_currency
+        categories.by_category = {k: float(v * conversion_rate) for k, v in categories.by_category.items()}
+        for cat in categories.top_categories:
+            cat['amount'] = float(cat['amount']) * float(conversion_rate)
+        
+        # Update group insight
+        groups_insight.currency_code = original_currency
+        for group_id, group_data in groups_insight.by_group.items():
+            group_data['total_spending'] = float(group_data['total_spending']) * float(conversion_rate)
+        for group in groups_insight.top_groups:
+            group['total_spending'] = float(group['total_spending']) * float(conversion_rate)
+        
+        # Update subscriptions
+        subscriptions.currency_code = original_currency
+        subscriptions.total_monthly_subscriptions = subscriptions.total_monthly_subscriptions * conversion_rate
+        for sub in subscriptions.subscriptions:
+            sub.average_amount = sub.average_amount * conversion_rate
+            sub.total_amount = sub.total_amount * conversion_rate
+        
+        # Update cash flow
+        cash_flow.currency_code = original_currency
+        cash_flow.total_paid = cash_flow.total_paid * conversion_rate
+        cash_flow.total_received = cash_flow.total_received * conversion_rate
+        cash_flow.net_cash_flow = cash_flow.net_cash_flow * conversion_rate
+        
+        # Update settlement efficiency
+        settlement.currency_code = original_currency
+        settlement.unpaid_balances_total = settlement.unpaid_balances_total * conversion_rate
+        
+        # Update balance prediction
+        prediction.currency_code = original_currency
+        prediction.predicted_balance = prediction.predicted_balance * conversion_rate
+    else:
+        # If already in original currency, just update currency codes
+        spending.currency_code = original_currency
+        balance.currency_code = original_currency
+        categories.currency_code = original_currency
+        groups_insight.currency_code = original_currency
+        subscriptions.currency_code = original_currency
+        cash_flow.currency_code = original_currency
+        settlement.currency_code = original_currency
+        prediction.currency_code = original_currency
     
     return AllInsights(
         validation=validation,

@@ -5,8 +5,14 @@ All models use Pydantic for validation and type safety.
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from typing import List, Optional, Dict, Any, Union, Annotated
+from pydantic import BaseModel, Field, field_validator, PlainSerializer
+
+# Custom type that serializes Decimal as float for JSON compatibility
+SerializableDecimal = Annotated[
+    Union[Decimal, float],
+    PlainSerializer(lambda x: float(x) if isinstance(x, Decimal) else x, return_type=float)
+]
 
 
 class CurrencyCode(str, Enum):
@@ -119,28 +125,28 @@ class ValidationResult(BaseModel):
 # Analytics insight models
 class SpendingInsight(BaseModel):
     """Spending trends over time"""
-    total_spending: Decimal
+    total_spending: SerializableDecimal
     currency_code: str
-    monthly_breakdown: Dict[str, Decimal]  # "YYYY-MM" -> amount
-    quarterly_breakdown: Dict[str, Decimal]  # "YYYY-Q1" -> amount
-    yearly_breakdown: Dict[str, Decimal]  # "YYYY" -> amount
+    monthly_breakdown: Dict[str, SerializableDecimal]  # "YYYY-MM" -> amount
+    quarterly_breakdown: Dict[str, SerializableDecimal]  # "YYYY-Q1" -> amount
+    yearly_breakdown: Dict[str, SerializableDecimal]  # "YYYY" -> amount
     explanation: str
 
 
 class BalanceInsight(BaseModel):
     """Net balance trends"""
-    net_balance: Decimal  # Positive = net owed to user, Negative = user owes net
+    net_balance: SerializableDecimal  # Positive = net owed to user, Negative = user owes net
     currency_code: str
-    owed_to_user: Decimal
-    user_owes: Decimal
-    by_person: Dict[int, Decimal]  # user_id -> net balance
-    trend_over_time: Dict[str, Decimal]  # "YYYY-MM" -> net balance
+    owed_to_user: SerializableDecimal
+    user_owes: SerializableDecimal
+    by_person: Dict[int, SerializableDecimal]  # user_id -> net balance
+    trend_over_time: Dict[str, SerializableDecimal]  # "YYYY-MM" -> net balance
     explanation: str
 
 
 class CategoryInsight(BaseModel):
     """Category-wise spending breakdown"""
-    by_category: Dict[str, Decimal]  # category -> total amount
+    by_category: Dict[str, SerializableDecimal]  # category -> total amount
     currency_code: str
     top_categories: List[Dict[str, Any]]  # [{"category": str, "amount": Decimal, "percentage": float}]
     explanation: str
@@ -158,10 +164,10 @@ class RecurringExpense(BaseModel):
     """Recurring expense pattern"""
     description_pattern: str
     category: Optional[str]
-    average_amount: Decimal
+    average_amount: SerializableDecimal
     frequency_days: float
     occurrences: int
-    total_amount: Decimal
+    total_amount: SerializableDecimal
     currency_code: str
     last_occurrence: datetime
 
@@ -171,7 +177,7 @@ class SettlementEfficiency(BaseModel):
     average_settlement_days: float
     median_settlement_days: float
     unpaid_balances_count: int
-    unpaid_balances_total: Decimal
+    unpaid_balances_total: SerializableDecimal
     currency_code: str
     by_person: Dict[int, float]  # user_id -> average settlement days
     explanation: str
@@ -179,9 +185,9 @@ class SettlementEfficiency(BaseModel):
 
 class CashFlowInsight(BaseModel):
     """Cash flow directionality analysis"""
-    total_paid: Decimal
-    total_received: Decimal
-    net_cash_flow: Decimal  # Positive = net payer, Negative = net receiver
+    total_paid: SerializableDecimal
+    total_received: SerializableDecimal
+    net_cash_flow: SerializableDecimal  # Positive = net payer, Negative = net receiver
     currency_code: str
     front_pay_percentage: float  # Percentage of expenses user front-paid
     explanation: str
@@ -197,14 +203,14 @@ class AnomalyDetection(BaseModel):
 class SubscriptionDetection(BaseModel):
     """Detected recurring subscriptions"""
     subscriptions: List[RecurringExpense]
-    total_monthly_subscriptions: Decimal
+    total_monthly_subscriptions: SerializableDecimal
     currency_code: str
     explanation: str
 
 
 class BalancePrediction(BaseModel):
     """Predicted end-of-month balance"""
-    predicted_balance: Decimal
+    predicted_balance: SerializableDecimal
     currency_code: str
     confidence_level: str  # "high", "medium", "low"
     based_on_months: int

@@ -54,11 +54,13 @@ class DataNormalizer:
             # Unknown currency - assume 1:1 (should log warning in production)
             return amount
         
-        # Convert: amount_in_base = amount_in_source * (base_rate / source_rate)
+        # Exchange rates represent: 1 unit of currency = X units of USD
+        # To convert from source to base (USD by default):
+        # amount_in_base = amount_in_source * source_rate / base_rate
         source_rate = self.EXCHANGE_RATES[from_currency]
         base_rate = self.EXCHANGE_RATES[self.base_currency]
         
-        converted = amount * (base_rate / source_rate)
+        converted = amount * (source_rate / base_rate)
         return converted.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     
     def normalize_timestamp(self, dt: datetime) -> datetime:
