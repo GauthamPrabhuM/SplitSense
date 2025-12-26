@@ -53,11 +53,10 @@ USER appuser
 # Expose port (Railway will set PORT env var)
 EXPOSE 8000
 
-# Health check (uses default port, Railway will work fine)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/api/health || exit 1
+# Health check disabled - Railway handles this internally
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+#     CMD curl -f http://localhost:${PORT:-8000}/api/health || exit 1
 
 # Start backend (serves frontend static files)
 # Railway provides PORT environment variable, default to 8000 if not set
-# Use ENTRYPOINT to ensure Railway doesn't override with auto-detected commands
-ENTRYPOINT ["python", "start.py"]
+CMD ["python", "start.py"]
