@@ -51,13 +51,13 @@ RUN chmod +x start.py && chown appuser:appuser start.py
 # Switch to non-root user
 USER appuser
 
-# Expose port (Railway will set PORT env var)
+# Expose port (Render/other platforms will set PORT env var)
 EXPOSE 8000
 
-# Health check disabled - Railway handles this internally
-# HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-#     CMD curl -f http://localhost:${PORT:-8000}/api/health || exit 1
+# Health check for Render
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8000}/api/health || exit 1
 
 # Start backend (serves frontend static files)
-# Railway provides PORT environment variable, default to 8000 if not set
+# Platform provides PORT environment variable, default to 8000 if not set
 CMD ["python", "start.py"]

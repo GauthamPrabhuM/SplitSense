@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Start script for Railway deployment.
+Start script for deployment (Render/other platforms).
 Reads PORT from environment variable and starts the server.
 """
 import os

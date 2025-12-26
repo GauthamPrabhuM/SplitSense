@@ -1,40 +1,27 @@
 services:
-  # Backend API Service
+  # Full-stack app (FastAPI + Next.js frontend) using Docker
   - type: web
-    name: splitsense-backend
-    env: python
-    plan: free  # Free tier - 750 hours/month, spins down after 15 min
-    region: oregon  # Choose closest region
-    # Python version specified in runtime.txt (3.11.9) - required for pandas 2.1.3 compatibility
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1
+    name: splitsense
+    env: docker
+    plan: free  # Free tier - 750 hours/month, spins down after 15 min inactivity
+    region: oregon  # Choose closest region (oregon, frankfurt, singapore, mumbai)
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/health
     envVars:
       - key: ENVIRONMENT
         value: production
       - key: CORS_ORIGINS
-        value: https://splitsense.vercel.app,https://splitsense.netlify.app
+        value: https://splitsense.onrender.com
       - key: FRONTEND_URL
-        value: https://splitsense.vercel.app
+        value: https://splitsense.onrender.com
       - key: BASE_CURRENCY
         value: USD
       - key: MASK_SENSITIVE_DATA
         value: "true"
       - key: LOCAL_ONLY
         value: "false"
-      - key: USE_DB_POOLING
-        value: "false"
       # IMPORTANT: Set these in Render dashboard as SECRET environment variables:
       # - SPLITWISE_CLIENT_ID (mark as secret)
       # - SPLITWISE_CLIENT_SECRET (mark as secret)
-      # - SPLITWISE_REDIRECT_URI=https://splitsense-backend.onrender.com/auth/callback
-      # Optional - Database (if you add PostgreSQL):
-      # - DATABASE_URL (auto-set if you add PostgreSQL service)
-
-  # PostgreSQL Database (optional - only if you need persistence)
-  # Uncomment if you want a database (free tier available)
-  # - type: pspg
-  #   name: splitsense-db
-  #   plan: free
-  #   databaseName: splitsense
-  #   user: splitsense_user
+      # - SPLITWISE_REDIRECT_URI=https://splitsense.onrender.com/auth/callback
