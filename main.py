@@ -938,12 +938,26 @@ if frontend_out.exists():
         if full_path.startswith("api/") or full_path.startswith("auth/") or full_path.startswith("docs"):
             raise HTTPException(status_code=404)
         
-        # Try to serve the requested file
+        # Try to serve the requested file directly (for static assets)
         file_path = frontend_out / full_path
         if file_path.exists() and file_path.is_file() and file_path.suffix in [".html", ".js", ".css", ".json", ".ico", ".png", ".jpg", ".svg", ".woff", ".woff2", ".ttf", ".eot"]:
             return FileResponse(str(file_path))
         
-        # For client-side routes, serve index.html
+        # For Next.js static export routes (e.g., /friends -> friends.html)
+        # Strip trailing slash if present
+        clean_path = full_path.rstrip("/")
+        if clean_path:
+            # Try route.html (e.g., friends -> friends.html)
+            html_file = frontend_out / f"{clean_path}.html"
+            if html_file.exists():
+                return FileResponse(str(html_file))
+            
+            # Try route/index.html (e.g., friends -> friends/index.html)
+            index_in_dir = frontend_out / clean_path / "index.html"
+            if index_in_dir.exists():
+                return FileResponse(str(index_in_dir))
+        
+        # For root path, serve index.html
         index_file = frontend_out / "index.html"
         if index_file.exists():
             return FileResponse(str(index_file))
