@@ -98,9 +98,9 @@ export default function DashboardPage() {
                   <Button 
                     variant="outline" 
                     onClick={() => {
-                      // Trigger PDF download
+                      // Trigger PDF download - use relative URL so it works in any environment
                       const link = document.createElement('a');
-                      link.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/report`;
+                      link.href = '/api/report';
                       link.download = 'splitsense_report.pdf';
                       document.body.appendChild(link);
                       link.click();
