@@ -9,11 +9,26 @@ from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import logging
+
+# Optional rate limiting
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+    RATE_LIMITING_AVAILABLE = True
+except ImportError:
+    RATE_LIMITING_AVAILABLE = False
+    # Create dummy decorator if slowapi not available
+    def limiter_dummy(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 
 from ingestion import SplitwiseAPIClient, FileParser, DataNormalizer
 from validation import DataVerifier
@@ -44,19 +59,46 @@ except (ImportError, ValueError) as e:
     OAUTH_AVAILABLE = False
     print(f"OAuth not available: {e}. Users can still use manual API tokens.")
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO if os.getenv("ENVIRONMENT") == "production" else logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(
     title="SplitSense - Splitwise Analytics",
     version="2.0.0",
     description="Comprehensive Splitwise expense analysis with OAuth integration"
 )
 
+# Initialize rate limiter
+if RATE_LIMITING_AVAILABLE:
+    limiter = Limiter(key_func=get_remote_address)
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    RATE_LIMITING_ENABLED = True
+    logger.info("Rate limiting enabled")
+else:
+    limiter = None
+    RATE_LIMITING_ENABLED = False
+    logger.warning("slowapi not installed, rate limiting disabled")
+
 # CORS middleware for production
+# Get allowed origins from environment or default to localhost for development
+allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+if os.getenv("ENVIRONMENT") == "production":
+    # In production, only allow specific domains
+    production_origins = os.getenv("CORS_ORIGINS", "").split(",")
+    allowed_origins = [origin.strip() for origin in production_origins if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your domain
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    max_age=3600,
 )
 
 # Global state (in production, use proper state management)
