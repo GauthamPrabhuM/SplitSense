@@ -41,8 +41,13 @@ COPY . .
 # Copy built Next.js static files (from 'out' directory)
 COPY --from=frontend-builder /app/frontend/out ./frontend/out
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# Create non-root user (must be before chmod so permissions are set correctly)
+RUN useradd -m -u 1000 appuser
+
+# Make start.py executable
+RUN chmod +x start.py && chown appuser:appuser start.py
+
+# Switch to non-root user
 USER appuser
 
 # Expose port (Railway will set PORT env var)
@@ -54,4 +59,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Start backend (serves frontend static files)
 # Railway provides PORT environment variable, default to 8000 if not set
-CMD ["python", "start.py"]
+# Use ENTRYPOINT to ensure Railway doesn't override with auto-detected commands
+ENTRYPOINT ["python", "start.py"]
