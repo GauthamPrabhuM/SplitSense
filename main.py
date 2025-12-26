@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Depends, Response
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -55,6 +55,15 @@ from config import Config
 # Try to import OAuth (optional - falls back to manual token if not configured)
 try:
     from auth.oauth import SplitwiseOAuth, generate_oauth_state, validate_oauth_state, clear_oauth_state
+    from auth.sessions import session_manager, SESSION_COOKIE_NAME, get_cookie_settings
+    from auth.middleware import (
+        get_current_user,
+        get_optional_user,
+        set_session_cookie,
+        clear_session_cookie,
+        get_user_identifier,
+        AuthenticationError,
+    )
     OAUTH_AVAILABLE = True
 except (ImportError, ValueError) as e:
     OAUTH_AVAILABLE = False
@@ -73,9 +82,10 @@ app = FastAPI(
     description="Comprehensive Splitwise expense analysis with OAuth integration"
 )
 
-# Initialize rate limiter
-if RATE_LIMITING_AVAILABLE:
-    limiter = Limiter(key_func=get_remote_address)
+# Initialize rate limiter with user-based key function
+if RATE_LIMITING_AVAILABLE and OAUTH_AVAILABLE:
+    # Use user ID for rate limiting when authenticated, IP otherwise
+    limiter = Limiter(key_func=get_user_identifier)
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     RATE_LIMITING_ENABLED = True
@@ -102,13 +112,25 @@ app.add_middleware(
     max_age=3600,
 )
 
-# Global state (in production, use proper state management)
+# ============================================================================
+# USER DATA STORAGE - NOW SESSION-SCOPED (SECURE)
+# ============================================================================
+# Previously: Global variables shared across ALL users (INSECURE!)
+# Now: User data is stored in session_manager, keyed by session ID
+# Each user only sees their own data.
+#
+# The following variables are DEPRECATED and only kept for backwards compatibility
+# with manual API token ingestion (development mode only).
+# In production with OAuth, all data is stored in the user's session.
+# ============================================================================
+
+# DEPRECATED: Legacy global state (only for development/manual token mode)
 current_data: Optional[AllInsights] = None
 current_expenses: list[Expense] = []
 current_groups: list[Group] = []
 current_user_id: Optional[int] = None
-current_friend_balances: list[dict] = []  # Friend balances from Splitwise API
-current_access_token: Optional[str] = None  # OAuth access token
+current_friend_balances: list[dict] = []
+current_access_token: Optional[str] = None
 
 
 class IngestRequest(BaseModel):
@@ -344,6 +366,136 @@ async def health():
     }
 
 
+@app.get("/api/me")
+async def get_current_user_info(request: Request):
+    """
+    Get current authenticated user info.
+    Returns user details if authenticated, 401 if not.
+    
+    Used by frontend to check authentication status.
+    """
+    if not OAUTH_AVAILABLE:
+        raise HTTPException(status_code=501, detail="OAuth not configured")
+    
+    signed_session = request.cookies.get(SESSION_COOKIE_NAME)
+    if not signed_session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    session = session_manager.get_session(signed_session)
+    if not session:
+        raise HTTPException(status_code=401, detail="Session expired or invalid")
+    
+    return {
+        "user_id": session.user_id,
+        "first_name": session.first_name,
+        "last_name": session.last_name,
+        "email": session.email,
+        "has_data": session.insights is not None,
+        "expenses_count": len(session.expenses),
+        "groups_count": len(session.groups),
+    }
+
+
+@app.post("/auth/logout")
+async def logout(request: Request, response: Response):
+    """
+    Log out the current user by destroying their session.
+    """
+    if OAUTH_AVAILABLE:
+        signed_session = request.cookies.get(SESSION_COOKIE_NAME)
+        if signed_session:
+            session_manager.destroy_session(signed_session)
+    
+    # Clear the session cookie
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path="/",
+    )
+    
+    return {"status": "logged_out"}
+
+
+@app.post("/api/refresh")
+async def refresh_user_data(request: Request):
+    """
+    Refresh the authenticated user's data from Splitwise API.
+    
+    SECURITY: Only refreshes data for the authenticated user.
+    """
+    if not OAUTH_AVAILABLE:
+        raise HTTPException(status_code=501, detail="OAuth not configured")
+    
+    signed_session = request.cookies.get(SESSION_COOKIE_NAME)
+    if not signed_session:
+        raise HTTPException(status_code=401, detail="Not authenticated. Please log in.")
+    
+    session = session_manager.get_session(signed_session)
+    if not session:
+        raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+    
+    try:
+        # Use the stored access token to fetch fresh data
+        client = SplitwiseAPIClient(session.access_token)
+        data = client.fetch_all_data()
+        
+        # Parse fresh data
+        expenses = []
+        groups = []
+        friend_balances = []
+        user_id = data["current_user"].get("id", session.user_id)
+        
+        for group_data in data.get("groups", []):
+            try:
+                groups.append(client.parse_group(group_data))
+            except Exception:
+                continue
+        
+        for expense_data in data.get("expenses", []):
+            try:
+                expenses.append(client.parse_expense(expense_data))
+            except Exception:
+                continue
+        
+        try:
+            friends_data = client.get_friends()
+            for friend in friends_data:
+                for bal in friend.get("balance", []):
+                    amount = float(bal.get("amount", 0))
+                    if amount != 0:
+                        friend_balances.append({
+                            "user_id": friend.get("id"),
+                            "first_name": friend.get("first_name", ""),
+                            "last_name": friend.get("last_name", ""),
+                            "email": friend.get("email"),
+                            "balance": amount,
+                            "currency_code": bal.get("currency_code", "USD")
+                        })
+        except Exception as e:
+            print(f"Warning: Failed to fetch friend balances: {e}")
+        
+        # Process insights
+        insights = process_data(expenses, groups, user_id, "USD")
+        
+        # Update session with fresh data
+        session_manager.update_session_data(
+            signed_session,
+            expenses=expenses,
+            groups=groups,
+            insights=insights,
+            friend_balances=friend_balances,
+        )
+        
+        return {
+            "status": "success",
+            "expenses_count": len(expenses),
+            "groups_count": len(groups),
+            "friend_balances_count": len(friend_balances),
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to refresh data: {str(e)}")
+
+
 # OAuth endpoints
 if OAUTH_AVAILABLE:
     @app.get("/auth/login")
@@ -441,9 +593,6 @@ if OAUTH_AVAILABLE:
             
             print("Access token received, fetching data...")
             
-            # Store token (in production, use secure session storage)
-            current_access_token = access_token
-            
             if state:
                 clear_oauth_state(state)
             
@@ -452,11 +601,17 @@ if OAUTH_AVAILABLE:
                 client = SplitwiseAPIClient(access_token)
                 data = client.fetch_all_data()
                 
+                # Get user info from Splitwise
+                current_user = data.get("current_user", {})
+                user_id = current_user.get("id", 1)
+                first_name = current_user.get("first_name", "User")
+                last_name = current_user.get("last_name", "")
+                email = current_user.get("email")
+                
                 # Process the data
                 expenses = []
                 groups = []
                 friend_balances = []
-                user_id = data["current_user"].get("id", 1)
                 
                 # Parse groups
                 for group_data in data.get("groups", []):
@@ -493,23 +648,46 @@ if OAUTH_AVAILABLE:
                 except Exception as e:
                     print(f"Warning: Failed to fetch friend balances: {str(e)}")
                 
-                # Process and store data
-                global current_data, current_expenses, current_groups, current_user_id, current_friend_balances
-                current_expenses = expenses
-                current_groups = groups
-                current_user_id = user_id
-                current_friend_balances = friend_balances
-                
+                # Process insights
                 insights = process_data(expenses, groups, user_id, "USD")
-                current_data = insights
                 
+                # ============================================================
+                # CREATE SECURE USER SESSION
+                # ============================================================
+                # Create a session for this user with their data isolated
+                signed_session = session_manager.create_session(
+                    splitwise_user_id=user_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=email,
+                    access_token=access_token,
+                )
+                
+                # Store user's data in their session (not global!)
+                session_manager.update_session_data(
+                    signed_session,
+                    expenses=expenses,
+                    groups=groups,
+                    insights=insights,
+                    friend_balances=friend_balances,
+                )
+                
+                print(f"Session created for user {user_id} ({first_name} {last_name})")
                 print(f"Data processed successfully: {len(expenses)} expenses, {len(groups)} groups")
                 print("Redirecting to frontend...")
                 
-                # Redirect to frontend with success parameter
-                # Frontend URL from environment or default to localhost:3000
+                # Redirect to frontend with session cookie
                 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-                return RedirectResponse(url=f"{frontend_url}/?oauth=success", status_code=302)
+                response = RedirectResponse(url=f"{frontend_url}/?oauth=success", status_code=302)
+                
+                # Set secure session cookie
+                cookie_settings = get_cookie_settings()
+                response.set_cookie(
+                    value=signed_session,
+                    **cookie_settings
+                )
+                
+                return response
             except Exception as e:
                 print(f"Error during data ingestion: {str(e)}")
                 import traceback
@@ -749,17 +927,47 @@ async def ingest_file(
 
 
 @app.get("/api/insights")
-async def get_insights():
-    """Get all generated insights"""
+async def get_insights(request: Request):
+    """
+    Get all generated insights for the authenticated user.
+    
+    SECURITY: Only returns data for the authenticated user's session.
+    Each user can only see their own data.
+    """
+    # Try to get user from session (OAuth flow)
+    if OAUTH_AVAILABLE:
+        signed_session = request.cookies.get(SESSION_COOKIE_NAME)
+        if signed_session:
+            session = session_manager.get_session(signed_session)
+            if session and session.insights:
+                return session.insights.model_dump()
+    
+    # Fallback to global data (legacy/development mode only)
     if current_data is None:
-        raise HTTPException(status_code=404, detail="No data available. Please ingest data first.")
+        raise HTTPException(
+            status_code=401, 
+            detail="Not authenticated. Please log in with Splitwise."
+        )
     
     return current_data.model_dump()
 
 
 @app.get("/api/friends")
-async def get_friends():
-    """Get friend balances from Splitwise API (accurate current balances)"""
+async def get_friends(request: Request):
+    """
+    Get friend balances from Splitwise API for the authenticated user.
+    
+    SECURITY: Only returns the authenticated user's friend data.
+    """
+    # Try to get user from session (OAuth flow)
+    if OAUTH_AVAILABLE:
+        signed_session = request.cookies.get(SESSION_COOKIE_NAME)
+        if signed_session:
+            session = session_manager.get_session(signed_session)
+            if session:
+                return {"friends": session.friend_balances}
+    
+    # Fallback to global data (legacy/development mode only)
     if not current_friend_balances:
         raise HTTPException(status_code=404, detail="No friend data available. Please ingest data first.")
     
@@ -866,15 +1074,34 @@ async def export_pdf():
 
 
 @app.get("/api/report")
-async def generate_analytics_report():
+async def generate_analytics_report(request: Request):
     """
     Generate a newspaper-style analytics report as a downloadable PDF.
     Returns a professionally formatted 1-page A4 document.
+    
+    SECURITY: Only generates report for the authenticated user's data.
     """
-    if current_data is None:
+    # Get user data from session
+    user_data = None
+    friend_balances = []
+    
+    if OAUTH_AVAILABLE:
+        signed_session = request.cookies.get(SESSION_COOKIE_NAME)
+        if signed_session:
+            session = session_manager.get_session(signed_session)
+            if session and session.insights:
+                user_data = session.insights
+                friend_balances = session.friend_balances
+    
+    # Fallback to global data (legacy mode)
+    if user_data is None:
+        user_data = current_data
+        friend_balances = current_friend_balances
+    
+    if user_data is None:
         raise HTTPException(
-            status_code=404,
-            detail="No data available. Please ingest data first."
+            status_code=401,
+            detail="Not authenticated. Please log in with Splitwise."
         )
     
     # Helper to safely convert to dict
@@ -889,23 +1116,23 @@ async def generate_analytics_report():
     
     # Prepare insights data as dict
     insights_dict = {
-        'spending': to_dict(current_data.spending),
-        'balance': to_dict(current_data.balance),
-        'categories': to_dict(current_data.categories),
-        'groups': to_dict(current_data.groups),
-        'subscriptions': to_dict(current_data.subscriptions),
-        'cash_flow': to_dict(current_data.cash_flow),
-        'settlement_efficiency': to_dict(current_data.settlement_efficiency),
-        'balance_prediction': to_dict(current_data.balance_prediction),
-        'friction': to_dict(current_data.friction),
-        'anomalies': to_dict(current_data.anomalies),
-        'data_summary': to_dict(current_data.data_summary),
+        'spending': to_dict(user_data.spending),
+        'balance': to_dict(user_data.balance),
+        'categories': to_dict(user_data.categories),
+        'groups': to_dict(user_data.groups),
+        'subscriptions': to_dict(user_data.subscriptions),
+        'cash_flow': to_dict(user_data.cash_flow),
+        'settlement_efficiency': to_dict(user_data.settlement_efficiency),
+        'balance_prediction': to_dict(user_data.balance_prediction),
+        'friction': to_dict(user_data.friction),
+        'anomalies': to_dict(user_data.anomalies),
+        'data_summary': to_dict(user_data.data_summary),
     }
     
     # Get friend balances
     friends_list = []
-    if current_friend_balances:
-        friends_list = [to_dict(f) for f in current_friend_balances]
+    if friend_balances:
+        friends_list = [to_dict(f) if hasattr(f, 'model_dump') else f for f in friend_balances]
     
     # Generate the report
     generator = ReportGenerator()

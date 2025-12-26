@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   FileText,
   Download,
+  LogOut,
 } from 'lucide-react';
 import { Header } from '../components/layout/header';
 import { Footer } from '../components/layout/footer';
@@ -24,18 +25,25 @@ import { DataIngestion } from '../components/dashboard/data-ingestion';
 import { CardSkeleton, ChartSkeleton, TableSkeleton } from '../components/ui/skeleton';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { useInsights, useFriends } from '../lib/api';
+import { useInsights, useFriends, useCurrentUser, refreshUserData, logout } from '../lib/api';
 import { formatCurrency, formatDate } from '../lib/utils';
 
 export default function DashboardPage() {
+  const { user, isAuthenticated, isAuthError, isLoading: userLoading } = useCurrentUser();
   const { insights, isLoading, isError, refresh } = useInsights();
-  const { friends: friendBalances } = useFriends();
+  const { friends: friendBalances, refresh: refreshFriends } = useFriends();
   const [showIngestion, setShowIngestion] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Show ingestion if no data
+  // Show ingestion/login if not authenticated or no data
   useEffect(() => {
-    if (!isLoading && !insights && !isError) {
-      setShowIngestion(true);
+    if (!userLoading && !isLoading) {
+      // If not authenticated, show login
+      if (isAuthError || !isAuthenticated) {
+        setShowIngestion(true);
+      } else if (!insights) {
+        setShowIngestion(true);
+      }
     }
     
     // Check if coming from OAuth callback
@@ -44,15 +52,40 @@ export default function DashboardPage() {
       // OAuth was successful, refresh data
       setTimeout(() => {
         refresh();
+        refreshFriends();
         // Clean up URL
         window.history.replaceState({}, '', window.location.pathname);
-      }, 1000);
+      }, 500);
     }
-  }, [isLoading, insights, isError, refresh]);
+  }, [userLoading, isLoading, insights, isError, refresh, isAuthenticated, isAuthError, refreshFriends]);
 
   const handleIngestionSuccess = () => {
     setShowIngestion(false);
     refresh();
+    refreshFriends();
+  };
+
+  // Handle refresh button - fetches fresh data from Splitwise
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshUserData();
+      await refresh();
+      await refreshFriends();
+    } catch (error) {
+      console.error('Failed to refresh:', error);
+      // If session expired, show login
+      if ((error as Error).message?.includes('Session expired')) {
+        setShowIngestion(true);
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Handle logout
+  const handleLogout = async () => {
+    await logout();
   };
 
   // Use INR as default since the data is primarily in INR
@@ -111,10 +144,26 @@ export default function DashboardPage() {
                     <FileText className="h-4 w-4" />
                     Download Report
                   </Button>
-                  <Button variant="outline" onClick={() => refresh()} className="gap-2">
-                    <RefreshCw className="h-4 w-4" />
-                    Refresh
+                  <Button 
+                    variant="outline" 
+                    onClick={handleRefresh} 
+                    disabled={isRefreshing}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    {isRefreshing ? 'Refreshing...' : 'Refresh'}
                   </Button>
+                  {isAuthenticated && (
+                    <Button 
+                      variant="ghost" 
+                      onClick={handleLogout}
+                      className="gap-2 text-muted-foreground hover:text-foreground"
+                      title={`Logged in as ${user?.first_name}`}
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Logout
+                    </Button>
+                  )}
                 </div>
               </div>
 
