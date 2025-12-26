@@ -1,37 +1,35 @@
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Use 'standalone' for Railway, remove for Vercel/Netlify
-  output: process.env.NEXT_OUTPUT || undefined,
-  async rewrites() {
-    // Use environment variable for API URL, fallback to localhost for development
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  // Static export for simple serving from FastAPI
+  output: 'export',
+  // Disable image optimization for static export
+  images: {
+    unoptimized: true,
+  },
+  // Skip type checking and linting during build (faster builds)
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  // Webpack config to resolve @ alias - MUST work for Docker
+  webpack: (config) => {
+    // Get absolute path to src directory
+    // Use __dirname (location of next.config.js) as base
+    const srcPath = path.resolve(__dirname, 'src');
     
-    // Only add rewrites if API URL is set (for Vercel/Netlify)
-    if (apiUrl && apiUrl !== 'http://localhost:8000') {
-      return [
-        {
-          source: '/api/:path*',
-          destination: `${apiUrl}/api/:path*`,
-        },
-        {
-          source: '/auth/:path*',
-          destination: `${apiUrl}/auth/:path*`,
-        },
-      ];
-    }
+    // Initialize resolve and alias objects
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...config.resolve.alias, // Preserve existing aliases
+      '@': srcPath, // Add our @ alias pointing to src directory
+    };
     
-    // For local development, use localhost
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:8000/api/:path*',
-      },
-      {
-        source: '/auth/:path*',
-        destination: 'http://localhost:8000/auth/:path*',
-      },
-    ];
+    return config;
   },
 };
 

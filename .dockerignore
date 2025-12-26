@@ -13,13 +13,11 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
-*.cover
 
 # IDE
 .vscode/
 .idea/
 *.swp
-*.swo
 *~
 
 # OS
@@ -35,12 +33,11 @@ Thumbs.db
 .env.local
 .env.*.local
 
-# Frontend
-frontend/
-node_modules/
-.next/
-out/
-dist/
+# Frontend node_modules (built in Docker)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
 
 # Logs
 *.log
@@ -54,6 +51,7 @@ data/
 # Documentation
 *.md
 !README.md
+!DEPLOY*.md
 
 # CI/CD
 .github/
@@ -63,3 +61,5 @@ build/
 dist/
 *.egg-info/
 
+# Fly.io (if any)
+.fly/
