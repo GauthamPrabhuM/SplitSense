@@ -295,10 +295,17 @@
     <div class="container">
         <div class="section ingest-section">
             <h2>📥 Data Ingestion</h2>
+            <div id="oauthSection" style="margin-bottom: 1.5rem;">
+                <button onclick="oauthLogin()" style="padding: 1rem 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600; width: 100%; margin-bottom: 1rem;">
+                    🔐 Connect with Splitwise (OAuth)
+                </button>
+                <p style="text-align: center; color: #666; font-size: 0.9rem;">OR use manual method below</p>
+                <hr style="margin: 1rem 0; border: none; border-top: 1px solid #ddd;">
+            </div>
             <div class="ingest-form">
                 <input type="text" id="apiToken" placeholder="Splitwise API Token (get from https://secure.splitwise.com/apps)" />
                 <input type="file" id="fileInput" accept=".csv,.json" />
-                <button onclick="ingestData()">🚀 Ingest Data</button>
+                <button onclick="ingestData()">🚀 Ingest Data (Manual)</button>
             </div>
             <div id="ingestStatus"></div>
         </div>
@@ -361,6 +368,39 @@
     
     <script>
         let chartInstances = {};
+        let oauthAvailable = false;
+        
+        // Check if OAuth is available
+        async function checkOAuth() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                oauthAvailable = data.oauth_available || false;
+                
+                if (!oauthAvailable) {
+                    document.getElementById('oauthSection').style.display = 'none';
+                }
+            } catch (e) {
+                console.log('OAuth check failed:', e);
+            }
+        }
+        
+        async function oauthLogin() {
+            try {
+                const response = await fetch('/auth/login');
+                const data = await response.json();
+                
+                if (data.auth_url) {
+                    // Redirect to Splitwise OAuth
+                    window.location.href = data.auth_url;
+                } else {
+                    throw new Error('No auth URL received');
+                }
+            } catch (error) {
+                document.getElementById('ingestStatus').innerHTML = 
+                    `<div class="error">❌ OAuth login failed: ${error.message}</div>`;
+            }
+        }
         
         async function ingestData() {
             const statusDiv = document.getElementById('ingestStatus');
@@ -608,10 +648,36 @@
         
         // Try to load insights on page load
         window.addEventListener('load', async () => {
+            await checkOAuth();
+            
+            // Check if we're coming from OAuth callback (data should be ready)
+            const urlParams = new URLSearchParams(window.location.search);
+            const fromOAuth = urlParams.get('oauth') === 'success' || 
+                            document.referrer.includes('/auth/callback');
+            
             try {
                 await loadInsights();
+                
+                // If data loaded successfully, show a success message briefly
+                if (fromOAuth) {
+                    const statusDiv = document.getElementById('ingestStatus');
+                    if (statusDiv) {
+                        statusDiv.innerHTML = '<div class="success">✅ Connected to Splitwise! Your data has been loaded.</div>';
+                        // Clear the message after 5 seconds
+                        setTimeout(() => {
+                            statusDiv.innerHTML = '';
+                        }, 5000);
+                    }
+                }
             } catch (e) {
                 // No data available yet, that's fine
+                // But if coming from OAuth, show a message
+                if (fromOAuth) {
+                    const statusDiv = document.getElementById('ingestStatus');
+                    if (statusDiv) {
+                        statusDiv.innerHTML = '<div class="error">⚠️ Data is being processed. Please wait a moment and refresh.</div>';
+                    }
+                }
             }
         });
     </script>

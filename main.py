@@ -1,12 +1,18 @@
 """
 FastAPI application for Splitwise Analysis Tool.
+Production-ready with OAuth 2.0 integration.
 """
 import os
 import tempfile
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ingestion import SplitwiseAPIClient, FileParser, DataNormalizer
@@ -18,6 +24,7 @@ from analytics import (
     GroupAnalyzer,
     AdvancedAnalyzer,
 )
+from analytics.report_generator import ReportGenerator
 from visualization import ChartGenerator
 from models.schemas import (
     Expense,
@@ -29,7 +36,28 @@ from models.schemas import (
 )
 from config import Config
 
-app = FastAPI(title="Splitwise Analysis Tool", version="1.0.0")
+# Try to import OAuth (optional - falls back to manual token if not configured)
+try:
+    from auth.oauth import SplitwiseOAuth, generate_oauth_state, validate_oauth_state, clear_oauth_state
+    OAUTH_AVAILABLE = True
+except (ImportError, ValueError) as e:
+    OAUTH_AVAILABLE = False
+    print(f"OAuth not available: {e}. Users can still use manual API tokens.")
+
+app = FastAPI(
+    title="SplitSense - Splitwise Analytics",
+    version="2.0.0",
+    description="Comprehensive Splitwise expense analysis with OAuth integration"
+)
+
+# CORS middleware for production
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify your domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Global state (in production, use proper state management)
 current_data: Optional[AllInsights] = None
@@ -37,6 +65,7 @@ current_expenses: list[Expense] = []
 current_groups: list[Group] = []
 current_user_id: Optional[int] = None
 current_friend_balances: list[dict] = []  # Friend balances from Splitwise API
+current_access_token: Optional[str] = None  # OAuth access token
 
 
 class IngestRequest(BaseModel):
@@ -271,7 +300,231 @@ def read_dashboard_html() -> str:
 @app.get("/api/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "healthy", "version": "1.0.0"}
+    return {
+        "status": "healthy",
+        "version": "2.0.0",
+        "oauth_available": OAUTH_AVAILABLE
+    }
+
+
+# OAuth endpoints
+if OAUTH_AVAILABLE:
+    @app.get("/auth/login")
+    async def oauth_login():
+        """Initiate OAuth login flow"""
+        try:
+            oauth = SplitwiseOAuth()
+            state = generate_oauth_state()
+            auth_url = oauth.get_authorization_url(state)
+            
+            # Log for debugging
+            print(f"OAuth login initiated:")
+            print(f"  Redirect URI: {oauth.redirect_uri}")
+            print(f"  Auth URL: {auth_url[:100]}...")
+            
+            return {
+                "auth_url": auth_url, 
+                "state": state,
+                "redirect_uri": oauth.redirect_uri  # Include for debugging
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/auth/callback")
+    async def oauth_callback(code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
+        """OAuth callback endpoint"""
+        global current_access_token
+        
+        # Check for OAuth errors from Splitwise
+        if error:
+            print(f"OAuth error from Splitwise: {error}")
+            return HTMLResponse(
+                content=f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>OAuth Error</title>
+                    <meta http-equiv="refresh" content="3;url=/">
+                    <style>
+                        body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                        .error {{ color: #dc3545; font-size: 18px; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="error">❌ OAuth Error: {error}</div>
+                    <p>Redirecting back to dashboard...</p>
+                    <p><a href="/">Click here if not redirected</a></p>
+                </body>
+                </html>
+                """,
+                status_code=400
+            )
+        
+        if not code:
+            print("OAuth callback called without code parameter")
+            return HTMLResponse(
+                content="""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>OAuth Error</title>
+                    <meta http-equiv="refresh" content="3;url=/">
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                        .error { color: #dc3545; font-size: 18px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="error">❌ No authorization code received</div>
+                    <p>Redirecting back to dashboard...</p>
+                    <p><a href="/">Click here if not redirected</a></p>
+                </body>
+                </html>
+                """,
+                status_code=400
+            )
+        
+        print(f"OAuth callback received - code: {code[:20]}..., state: {state}")
+        
+        if state and not validate_oauth_state(state):
+            print(f"Invalid state parameter: {state}")
+            raise HTTPException(status_code=400, detail="Invalid state parameter")
+        
+        try:
+            print("Exchanging code for token...")
+            oauth = SplitwiseOAuth()
+            token_data = await oauth.exchange_code_for_token(code)
+            access_token = token_data.get("access_token")
+            
+            if not access_token:
+                print("No access token in response")
+                raise HTTPException(status_code=400, detail="No access token in response")
+            
+            print("Access token received, fetching data...")
+            
+            # Store token (in production, use secure session storage)
+            current_access_token = access_token
+            
+            if state:
+                clear_oauth_state(state)
+            
+            # Automatically ingest data after OAuth
+            try:
+                client = SplitwiseAPIClient(access_token)
+                data = client.fetch_all_data()
+                
+                # Process the data
+                expenses = []
+                groups = []
+                friend_balances = []
+                user_id = data["current_user"].get("id", 1)
+                
+                # Parse groups
+                for group_data in data.get("groups", []):
+                    try:
+                        groups.append(client.parse_group(group_data))
+                    except Exception as e:
+                        print(f"Warning: Failed to parse group: {str(e)}")
+                        continue
+                
+                # Parse expenses
+                for expense_data in data.get("expenses", []):
+                    try:
+                        expenses.append(client.parse_expense(expense_data))
+                    except Exception as e:
+                        print(f"Warning: Failed to parse expense: {str(e)}")
+                        continue
+                
+                # Fetch friend balances
+                try:
+                    friends_data = client.get_friends()
+                    for friend in friends_data:
+                        balances = friend.get("balance", [])
+                        for bal in balances:
+                            amount = float(bal.get("amount", 0))
+                            if amount != 0:
+                                friend_balances.append({
+                                    "user_id": friend.get("id"),
+                                    "first_name": friend.get("first_name", ""),
+                                    "last_name": friend.get("last_name", ""),
+                                    "email": friend.get("email"),
+                                    "balance": amount,
+                                    "currency_code": bal.get("currency_code", "USD")
+                                })
+                except Exception as e:
+                    print(f"Warning: Failed to fetch friend balances: {str(e)}")
+                
+                # Process and store data
+                global current_data, current_expenses, current_groups, current_user_id, current_friend_balances
+                current_expenses = expenses
+                current_groups = groups
+                current_user_id = user_id
+                current_friend_balances = friend_balances
+                
+                insights = process_data(expenses, groups, user_id, "USD")
+                current_data = insights
+                
+                print(f"Data processed successfully: {len(expenses)} expenses, {len(groups)} groups")
+                print("Redirecting to dashboard...")
+                
+                # Redirect to dashboard with success parameter
+                # Data is already loaded, so dashboard will display it immediately
+                return RedirectResponse(url="/?oauth=success", status_code=302)
+            except Exception as e:
+                print(f"Error during data ingestion: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return HTMLResponse(
+                    content=f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Authentication Error</title>
+                        <meta http-equiv="refresh" content="5;url=/">
+                        <style>
+                            body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                            .error {{ color: #dc3545; font-size: 18px; }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="error">⚠️ Authentication successful but data ingestion failed</div>
+                        <p style="color: #666; margin-top: 20px;">Error: {str(e)}</p>
+                        <p style="margin-top: 20px;">Redirecting to dashboard in 5 seconds...</p>
+                        <p><a href="/">Click here to return now</a></p>
+                    </body>
+                    </html>
+                    """,
+                    status_code=500
+                )
+        
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"OAuth callback error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return HTMLResponse(
+                content=f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>OAuth Error</title>
+                    <meta http-equiv="refresh" content="5;url=/">
+                    <style>
+                        body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                        .error {{ color: #dc3545; font-size: 18px; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="error">❌ OAuth callback failed</div>
+                    <p style="color: #666; margin-top: 20px;">{str(e)}</p>
+                    <p style="margin-top: 20px;">Redirecting to dashboard in 5 seconds...</p>
+                    <p><a href="/">Click here to return now</a></p>
+                </body>
+                </html>
+                """,
+                status_code=500
+            )
 
 
 @app.post("/api/ingest")
@@ -567,6 +820,62 @@ async def export_pdf():
         tmp_path,
         media_type='application/pdf',
         filename='splitwise_insights.pdf'
+    )
+
+
+@app.get("/api/report")
+async def generate_analytics_report():
+    """
+    Generate a newspaper-style analytics report as a downloadable PDF.
+    Returns a professionally formatted 1-page A4 document.
+    """
+    if current_data is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No data available. Please ingest data first."
+        )
+    
+    # Helper to safely convert to dict
+    def to_dict(obj):
+        if obj is None:
+            return {}
+        if isinstance(obj, dict):
+            return obj
+        if hasattr(obj, 'model_dump'):
+            return obj.model_dump()
+        return {}
+    
+    # Prepare insights data as dict
+    insights_dict = {
+        'spending': to_dict(current_data.spending),
+        'balance': to_dict(current_data.balance),
+        'categories': to_dict(current_data.categories),
+        'groups': to_dict(current_data.groups),
+        'subscriptions': to_dict(current_data.subscriptions),
+        'cash_flow': to_dict(current_data.cash_flow),
+        'settlement_efficiency': to_dict(current_data.settlement_efficiency),
+        'balance_prediction': to_dict(current_data.balance_prediction),
+        'friction': to_dict(current_data.friction),
+        'anomalies': to_dict(current_data.anomalies),
+        'data_summary': to_dict(current_data.data_summary),
+    }
+    
+    # Get friend balances
+    friends_list = []
+    if current_friend_balances:
+        friends_list = [to_dict(f) for f in current_friend_balances]
+    
+    # Generate the report
+    generator = ReportGenerator()
+    pdf_buffer = generator.generate_pdf(insights_dict, friends_list)
+    
+    # Return as streaming response
+    return StreamingResponse(
+        pdf_buffer,
+        media_type='application/pdf',
+        headers={
+            'Content-Disposition': 'attachment; filename="splitsense_report.pdf"'
+        }
     )
 
 
