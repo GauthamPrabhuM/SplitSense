@@ -21,7 +21,8 @@ services:
         value: "true"
       - key: LOCAL_ONLY
         value: "false"
+      - key: SPLITWISE_REDIRECT_URI
+        value: https://splitsense.onrender.com/auth/callback
       # IMPORTANT: Set these in Render dashboard as SECRET environment variables:
       # - SPLITWISE_CLIENT_ID (mark as secret)
       # - SPLITWISE_CLIENT_SECRET (mark as secret)
-      # - SPLITWISE_REDIRECT_URI=https://splitsense.onrender.com/auth/callback
