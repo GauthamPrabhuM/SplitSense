@@ -17,37 +17,17 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   // Webpack config to resolve @ alias - MUST work for Docker
-  webpack: (config, { isServer }) => {
-    // Get absolute path - critical for Docker builds
+  webpack: (config) => {
+    // Get absolute path to src directory
+    // Use __dirname (location of next.config.js) as base
     const srcPath = path.resolve(__dirname, 'src');
     
-    // Initialize resolve configuration
-    if (!config.resolve) {
-      config.resolve = {};
-    }
-    
-    // Set up alias
-    if (!config.resolve.alias) {
-      config.resolve.alias = {};
-    }
-    
-    // Set @ alias - makes @/lib/api resolve to src/lib/api
-    config.resolve.alias['@'] = srcPath;
-    
-    // Ensure modules array includes node_modules for proper resolution
-    if (!config.resolve.modules) {
-      config.resolve.modules = ['node_modules'];
-    }
-    
-    // Also add src to modules for direct imports
-    if (Array.isArray(config.resolve.modules)) {
-      config.resolve.modules.push(srcPath);
-    }
-    
-    // Ensure extensions are properly set
-    if (!config.resolve.extensions) {
-      config.resolve.extensions = ['.tsx', '.ts', '.jsx', '.js', '.json'];
-    }
+    // Initialize resolve and alias objects
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...config.resolve.alias, // Preserve existing aliases
+      '@': srcPath, // Add our @ alias pointing to src directory
+    };
     
     return config;
   },
