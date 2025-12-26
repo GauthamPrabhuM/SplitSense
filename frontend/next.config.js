@@ -21,12 +21,33 @@ const nextConfig = {
     // Get absolute path - critical for Docker builds
     const srcPath = path.resolve(__dirname, 'src');
     
-    // Initialize resolve and alias
-    config.resolve = config.resolve || {};
-    config.resolve.alias = config.resolve.alias || {};
+    // Initialize resolve configuration
+    if (!config.resolve) {
+      config.resolve = {};
+    }
+    
+    // Set up alias
+    if (!config.resolve.alias) {
+      config.resolve.alias = {};
+    }
     
     // Set @ alias - makes @/lib/api resolve to src/lib/api
     config.resolve.alias['@'] = srcPath;
+    
+    // Ensure modules array includes node_modules for proper resolution
+    if (!config.resolve.modules) {
+      config.resolve.modules = ['node_modules'];
+    }
+    
+    // Also add src to modules for direct imports
+    if (Array.isArray(config.resolve.modules)) {
+      config.resolve.modules.push(srcPath);
+    }
+    
+    // Ensure extensions are properly set
+    if (!config.resolve.extensions) {
+      config.resolve.extensions = ['.tsx', '.ts', '.jsx', '.js', '.json'];
+    }
     
     return config;
   },
