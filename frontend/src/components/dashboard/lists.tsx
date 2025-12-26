@@ -114,16 +114,70 @@ export function GroupList({ groups, currency }: GroupListProps) {
 interface FriendListProps {
   friends: Record<string, number> | PersonBalance[];
   currency: string;
+  friendBalances?: FriendBalance[];  // Optional real balances from Splitwise API
 }
 
-export function FriendList({ friends, currency }: FriendListProps) {
+export function FriendList({ friends, currency, friendBalances }: FriendListProps) {
+  // If we have real friend balances from Splitwise API, use them exclusively
+  if (friendBalances && friendBalances.length > 0) {
+    const sortedFriends = [...friendBalances].sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+    
+    return (
+      <div className="rounded-xl border bg-card">
+        <div className="flex items-center justify-between border-b p-4">
+          <h3 className="font-semibold">Balance by Person</h3>
+          <span className="text-sm text-muted-foreground">{sortedFriends.length} people</span>
+        </div>
+        <div className="divide-y max-h-[500px] overflow-y-auto">
+          {sortedFriends.map((friend) => {
+            const fullName = friend.last_name 
+              ? `${friend.first_name} ${friend.last_name}`.trim()
+              : friend.first_name;
+            const direction = friend.balance > 0 ? 'owed' : 'owe';
+            
+            return (
+              <div
+                key={friend.user_id}
+                className="flex items-center justify-between p-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-medium">
+                    {getInitials(fullName)}
+                  </div>
+                  <div>
+                    <p className="font-medium">{fullName}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {direction === 'owed' ? 'Owes you' : 'You owe'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {direction === 'owed' ? (
+                    <TrendingUp className="h-4 w-4 text-success" />
+                  ) : (
+                    <TrendingDown className="h-4 w-4 text-destructive" />
+                  )}
+                  <span className={cn('font-semibold', getBalanceColor(friend.balance))}>
+                    {formatCurrency(Math.abs(friend.balance), friend.currency_code)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback to calculated data if no real friend balances available
   // Convert dictionary format to array if needed
+  // The backend sends by_person as {name: balance} where name is the person's actual name
   const friendsArray: PersonBalance[] = Array.isArray(friends)
     ? friends
     : friends && typeof friends === 'object'
-      ? Object.entries(friends).map(([userId, balance]) => ({
-          user_id: parseInt(userId),
-          name: `User ${userId}`,
+      ? Object.entries(friends).map(([name, balance], index) => ({
+          user_id: index,  // Use index as key since we have name, not user_id
+          name: name,  // The key IS the name now
           balance: Number(balance),
           direction: (Number(balance) > 0 ? 'owed' : 'owe') as 'owed' | 'owe',
         }))

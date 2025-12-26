@@ -11,6 +11,8 @@ import {
   Calendar,
   PieChart,
   AlertTriangle,
+  FileText,
+  Download,
 } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
@@ -35,7 +37,18 @@ export default function DashboardPage() {
     if (!isLoading && !insights && !isError) {
       setShowIngestion(true);
     }
-  }, [isLoading, insights, isError]);
+    
+    // Check if coming from OAuth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('oauth') === 'success') {
+      // OAuth was successful, refresh data
+      setTimeout(() => {
+        refresh();
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname);
+      }, 1000);
+    }
+  }, [isLoading, insights, isError, refresh]);
 
   const handleIngestionSuccess = () => {
     setShowIngestion(false);
@@ -81,10 +94,28 @@ export default function DashboardPage() {
                     )}
                   </p>
                 </div>
-                <Button variant="outline" onClick={() => refresh()} className="gap-2">
-                  <RefreshCw className="h-4 w-4" />
-                  Refresh
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      // Trigger PDF download
+                      const link = document.createElement('a');
+                      link.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/report`;
+                      link.download = 'splitsense_report.pdf';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }} 
+                    className="gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Download Report
+                  </Button>
+                  <Button variant="outline" onClick={() => refresh()} className="gap-2">
+                    <RefreshCw className="h-4 w-4" />
+                    Refresh
+                  </Button>
+                </div>
               </div>
 
               {/* Summary Stats */}
@@ -162,9 +193,14 @@ export default function DashboardPage() {
                     {insights.groups?.top_groups && (
                       <GroupList groups={insights.groups.top_groups} currency={currency} />
                     )}
-                    {insights.balance?.by_person && Object.keys(insights.balance.by_person).length > 0 && (
-                      <FriendList friends={insights.balance.by_person} currency={currency} />
-                    )}
+                    {/* Show friend balances - prefer real Splitwise data */}
+                    {(friendBalances && friendBalances.length > 0) || (insights.balance?.by_person && Object.keys(insights.balance.by_person).length > 0) ? (
+                      <FriendList 
+                        friends={insights.balance?.by_person || {}} 
+                        currency={currency} 
+                        friendBalances={friendBalances}
+                      />
+                    ) : null}
                     {/* Show friction list with real balances from Splitwise API */}
                     {(friendBalances && friendBalances.length > 0) || (insights.friction?.by_person && insights.friction.by_person.length > 0) ? (
                       <FrictionList 
@@ -192,9 +228,9 @@ export default function DashboardPage() {
                           </p>
                         </div>
                         <div className="rounded-lg bg-destructive/10 p-4">
-                          <span className="text-sm text-muted-foreground">Total Share</span>
+                          <span className="text-sm text-muted-foreground">Total Owed</span>
                           <p className="mt-1 text-xl font-semibold text-destructive">
-                            {formatCurrency(insights.cash_flow?.total_share || 0, currency)}
+                            {formatCurrency(insights.cash_flow?.total_received || 0, currency)}
                           </p>
                         </div>
                       </div>
