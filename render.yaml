@@ -1,20 +1,39 @@
 services:
+  # Backend API Service
   - type: web
-    name: splitsense
+    name: splitsense-backend
     env: python
+    plan: free  # Free tier - 750 hours/month, spins down after 15 min
+    region: oregon  # Choose closest region
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /api/health
     envVars:
-      - key: SPLITWISE_CLIENT_ID
-        sync: false
-      - key: SPLITWISE_CLIENT_SECRET
-        sync: false
-      - key: SPLITWISE_REDIRECT_URI
-        value: https://splitsense.onrender.com/auth/callback
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: https://splitsense.vercel.app,https://splitsense.netlify.app
+      - key: FRONTEND_URL
+        value: https://splitsense.vercel.app
       - key: BASE_CURRENCY
         value: USD
       - key: MASK_SENSITIVE_DATA
         value: "true"
       - key: LOCAL_ONLY
         value: "false"
+      - key: USE_DB_POOLING
+        value: "false"
+      # IMPORTANT: Set these in Render dashboard as SECRET environment variables:
+      # - SPLITWISE_CLIENT_ID (mark as secret)
+      # - SPLITWISE_CLIENT_SECRET (mark as secret)
+      # - SPLITWISE_REDIRECT_URI=https://splitsense-backend.onrender.com/auth/callback
+      # Optional - Database (if you add PostgreSQL):
+      # - DATABASE_URL (auto-set if you add PostgreSQL service)
 
+  # PostgreSQL Database (optional - only if you need persistence)
+  # Uncomment if you want a database (free tier available)
+  # - type: pspg
+  #   name: splitsense-db
+  #   plan: free
+  #   databaseName: splitsense
+  #   user: splitsense_user
