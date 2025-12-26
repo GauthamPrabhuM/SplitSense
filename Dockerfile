@@ -48,10 +48,10 @@ USER appuser
 # Expose port (Railway will set PORT env var)
 EXPOSE 8000
 
-# Health check
+# Health check (uses default port, Railway will work fine)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/api/health || exit 1
+    CMD curl -f http://localhost:8000/api/health || exit 1
 
 # Start backend (serves frontend static files)
-# Railway provides PORT environment variable
-CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2"
+# Railway provides PORT environment variable, default to 8000 if not set
+CMD ["python", "start.py"]
