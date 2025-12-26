@@ -26,13 +26,20 @@
 1. Go to https://vercel.com → Sign up with GitHub
 2. **Add New** → **Project**
 3. Import repo → Configure:
-   - **Root Directory**: `frontend`
-   - **Framework**: Next.js (auto)
+   - **Root Directory**: `frontend` ⚠️ **IMPORTANT: Must set this!**
+   - **Framework**: Next.js (auto-detected)
+   - **Build Command**: `npm run build` (auto)
+   - **Output Directory**: `.next` (auto)
 4. Add environment variable:
    ```
    NEXT_PUBLIC_API_URL=https://splitsense-backend.onrender.com
    ```
-5. Deploy → Copy URL (e.g., `https://splitsense.vercel.app`)
+5. **Deploy** → Copy URL (e.g., `https://splitsense.vercel.app`)
+
+**⚠️ If build fails with "No Next.js version detected":**
+- Go to **Settings** → **General** → **Root Directory**
+- Make sure it's set to `frontend` (not root `/`)
+- Click **Save** and **Redeploy**
 
 ### Update Backend CORS - 1 minute
 

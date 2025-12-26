@@ -101,9 +101,11 @@ https://splitsense-backend.onrender.com
 2. Select your repository
 3. Configure:
    - **Framework Preset**: Next.js (auto-detected)
-   - **Root Directory**: `frontend`
+   - **Root Directory**: `frontend` ⚠️ **CRITICAL: Must set this!**
    - **Build Command**: `npm run build` (default)
    - **Output Directory**: `.next` (default)
+
+**⚠️ IMPORTANT**: If you don't set Root Directory to `frontend`, Vercel will look for `package.json` in the root directory and fail with "No Next.js version detected"
 
 ### 2.3 Set Environment Variables
 
