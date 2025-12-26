@@ -37,7 +37,18 @@ export default function DashboardPage() {
     if (!isLoading && !insights && !isError) {
       setShowIngestion(true);
     }
-  }, [isLoading, insights, isError]);
+    
+    // Check if coming from OAuth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('oauth') === 'success') {
+      // OAuth was successful, refresh data
+      setTimeout(() => {
+        refresh();
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname);
+      }, 1000);
+    }
+  }, [isLoading, insights, isError, refresh]);
 
   const handleIngestionSuccess = () => {
     setShowIngestion(false);

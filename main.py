@@ -338,13 +338,14 @@ if OAUTH_AVAILABLE:
         # Check for OAuth errors from Splitwise
         if error:
             print(f"OAuth error from Splitwise: {error}")
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
             return HTMLResponse(
                 content=f"""
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <title>OAuth Error</title>
-                    <meta http-equiv="refresh" content="3;url=/">
+                    <meta http-equiv="refresh" content="3;url={frontend_url}">
                     <style>
                         body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
                         .error {{ color: #dc3545; font-size: 18px; }}
@@ -353,7 +354,7 @@ if OAUTH_AVAILABLE:
                 <body>
                     <div class="error">❌ OAuth Error: {error}</div>
                     <p>Redirecting back to dashboard...</p>
-                    <p><a href="/">Click here if not redirected</a></p>
+                    <p><a href="{frontend_url}">Click here if not redirected</a></p>
                 </body>
                 </html>
                 """,
@@ -362,22 +363,23 @@ if OAUTH_AVAILABLE:
         
         if not code:
             print("OAuth callback called without code parameter")
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
             return HTMLResponse(
-                content="""
+                content=f"""
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <title>OAuth Error</title>
-                    <meta http-equiv="refresh" content="3;url=/">
+                    <meta http-equiv="refresh" content="3;url={frontend_url}">
                     <style>
-                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-                        .error { color: #dc3545; font-size: 18px; }
+                        body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                        .error {{ color: #dc3545; font-size: 18px; }}
                     </style>
                 </head>
                 <body>
                     <div class="error">❌ No authorization code received</div>
                     <p>Redirecting back to dashboard...</p>
-                    <p><a href="/">Click here if not redirected</a></p>
+                    <p><a href="{frontend_url}">Click here if not redirected</a></p>
                 </body>
                 </html>
                 """,
@@ -465,22 +467,24 @@ if OAUTH_AVAILABLE:
                 current_data = insights
                 
                 print(f"Data processed successfully: {len(expenses)} expenses, {len(groups)} groups")
-                print("Redirecting to dashboard...")
+                print("Redirecting to frontend...")
                 
-                # Redirect to dashboard with success parameter
-                # Data is already loaded, so dashboard will display it immediately
-                return RedirectResponse(url="/?oauth=success", status_code=302)
+                # Redirect to frontend with success parameter
+                # Frontend URL from environment or default to localhost:3000
+                frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                return RedirectResponse(url=f"{frontend_url}/?oauth=success", status_code=302)
             except Exception as e:
                 print(f"Error during data ingestion: {str(e)}")
                 import traceback
                 traceback.print_exc()
+                frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
                 return HTMLResponse(
                     content=f"""
                     <!DOCTYPE html>
                     <html>
                     <head>
                         <title>Authentication Error</title>
-                        <meta http-equiv="refresh" content="5;url=/">
+                        <meta http-equiv="refresh" content="5;url={frontend_url}">
                         <style>
                             body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
                             .error {{ color: #dc3545; font-size: 18px; }}
@@ -490,7 +494,7 @@ if OAUTH_AVAILABLE:
                         <div class="error">⚠️ Authentication successful but data ingestion failed</div>
                         <p style="color: #666; margin-top: 20px;">Error: {str(e)}</p>
                         <p style="margin-top: 20px;">Redirecting to dashboard in 5 seconds...</p>
-                        <p><a href="/">Click here to return now</a></p>
+                        <p><a href="{frontend_url}">Click here to return now</a></p>
                     </body>
                     </html>
                     """,
@@ -503,13 +507,14 @@ if OAUTH_AVAILABLE:
             print(f"OAuth callback error: {str(e)}")
             import traceback
             traceback.print_exc()
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
             return HTMLResponse(
                 content=f"""
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <title>OAuth Error</title>
-                    <meta http-equiv="refresh" content="5;url=/">
+                    <meta http-equiv="refresh" content="5;url={frontend_url}">
                     <style>
                         body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
                         .error {{ color: #dc3545; font-size: 18px; }}
@@ -519,7 +524,7 @@ if OAUTH_AVAILABLE:
                     <div class="error">❌ OAuth callback failed</div>
                     <p style="color: #666; margin-top: 20px;">{str(e)}</p>
                     <p style="margin-top: 20px;">Redirecting to dashboard in 5 seconds...</p>
-                    <p><a href="/">Click here to return now</a></p>
+                    <p><a href="{frontend_url}">Click here to return now</a></p>
                 </body>
                 </html>
                 """,

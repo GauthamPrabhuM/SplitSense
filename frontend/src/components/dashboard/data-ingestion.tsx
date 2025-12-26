@@ -1,18 +1,18 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, Key, CheckCircle2, AlertCircle, Loader2, FileUp, X } from 'lucide-react';
+import { Upload, Key, CheckCircle2, AlertCircle, Loader2, FileUp, X, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ingestFromAPI, ingestFromFile } from '@/lib/api';
+import { ingestFromAPI, ingestFromFile, checkOAuthAvailable, initiateOAuthLogin } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface DataIngestionProps {
   onSuccess: () => void;
 }
 
-type IngestionMethod = 'api' | 'file' | null;
+type IngestionMethod = 'oauth' | 'api' | 'file' | null;
 type IngestionStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export function DataIngestion({ onSuccess }: DataIngestionProps) {
@@ -21,7 +21,40 @@ export function DataIngestion({ onSuccess }: DataIngestionProps) {
   const [message, setMessage] = useState('');
   const [apiToken, setApiToken] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [oauthAvailable, setOAuthAvailable] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check OAuth availability on mount
+  useEffect(() => {
+    checkOAuthAvailable().then(setOAuthAvailable);
+    
+    // Check if coming from OAuth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('oauth') === 'success') {
+      // OAuth was successful, data should be loaded
+      setStatus('success');
+      setMessage('Successfully connected to Splitwise! Your data is being loaded...');
+      setTimeout(() => {
+        onSuccess();
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname);
+      }, 2000);
+    }
+  }, [onSuccess]);
+
+  const handleOAuthLogin = async () => {
+    setStatus('loading');
+    setMessage('Redirecting to Splitwise...');
+
+    try {
+      const authUrl = await initiateOAuthLogin();
+      // Redirect to Splitwise OAuth page
+      window.location.href = authUrl;
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Failed to initiate OAuth login');
+    }
+  };
 
   const handleAPISubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,35 +122,72 @@ export function DataIngestion({ onSuccess }: DataIngestionProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="grid gap-4 sm:grid-cols-2"
+            className="space-y-4"
           >
-            <button
-              onClick={() => setMethod('api')}
-              className="group relative rounded-xl border-2 border-dashed p-8 text-left transition-all hover:border-primary hover:bg-primary/5"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/20">
-                <Key className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="mt-4 font-semibold">Splitwise API</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Connect directly with your API token for live data
-              </p>
-            </button>
+            {/* OAuth Option (Primary) */}
+            {oauthAvailable && (
+              <motion.button
+                onClick={handleOAuthLogin}
+                className="group relative w-full rounded-xl border-2 border-primary bg-primary/5 p-8 text-left transition-all hover:border-primary hover:bg-primary/10"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-primary transition-colors group-hover:bg-primary/90">
+                    <Lock className="h-8 w-8 text-primary-foreground" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-semibold">Connect with Splitwise</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Secure OAuth login - no API token needed
+                    </p>
+                  </div>
+                  <div className="text-primary">→</div>
+                </div>
+              </motion.button>
+            )}
 
-            <button
-              onClick={() => setMethod('file')}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleFileDrop}
-              className="group relative rounded-xl border-2 border-dashed p-8 text-left transition-all hover:border-primary hover:bg-primary/5"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/20">
-                <Upload className="h-6 w-6 text-primary" />
+            {/* Alternative Methods */}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t"></div>
               </div>
-              <h3 className="mt-4 font-semibold">Upload File</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Import from CSV or JSON export file
-              </p>
-            </button>
+              <div className="relative flex justify-center text-sm">
+                <span className="bg-background px-4 text-muted-foreground">
+                  Or use alternative methods
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <button
+                onClick={() => setMethod('api')}
+                className="group relative rounded-xl border-2 border-dashed p-6 text-left transition-all hover:border-primary hover:bg-primary/5"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/20">
+                  <Key className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="mt-3 font-semibold">API Token</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Manual API token entry
+                </p>
+              </button>
+
+              <button
+                onClick={() => setMethod('file')}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleFileDrop}
+                className="group relative rounded-xl border-2 border-dashed p-6 text-left transition-all hover:border-primary hover:bg-primary/5"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/20">
+                  <Upload className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="mt-3 font-semibold">Upload File</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  CSV or JSON export
+                </p>
+              </button>
+            </div>
           </motion.div>
         )}
 
