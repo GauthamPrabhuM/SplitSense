@@ -12,17 +12,22 @@ This guide will help you deploy SplitSense to Render using their free tier.
    - Connect your GitHub repository
    - Select the repository: `GauthamPrabhuM/SplitSense`
 
-3. **Configure the Service**:
+3. **Configure the Service** (CRITICAL STEPS):
    - **Name**: `splitsense` (or any name you prefer)
    - **Region**: Choose closest to you (Oregon, Frankfurt, Singapore, Mumbai)
    - **Branch**: `main` (or your deployment branch)
    - **Root Directory**: Leave empty (root of repo)
-   - **Runtime**: **CRITICAL - Select "Docker"** (NOT Python!)
-   - **Dockerfile Path**: `./Dockerfile`
+   
+   **🚨 CRITICAL - Runtime Selection**:
+   - Render will auto-detect "Python" - **DO NOT USE THIS!**
+   - Scroll down or look for "Environment" or "Runtime" dropdown
+   - **MUST SELECT "Docker"** from the dropdown
+   - If you don't see Docker option, click "Advanced" or look for "Environment" settings
+   - **Dockerfile Path**: `./Dockerfile` (should auto-fill once Docker is selected)
    - **Docker Context**: `.` (current directory)
    - **Start Command**: Leave empty (uses Dockerfile CMD)
    
-   **IMPORTANT**: If you see "Python" as the detected runtime, you MUST change it to "Docker" manually. Render may auto-detect Python, but we need Docker for the full-stack build.
+   **Why Docker?** Our app needs to build both Next.js frontend AND Python backend together. Python-only builds fail because pandas 2.1.3 doesn't work with Python 3.13.
 
 4. **Environment Variables**:
    Click "Advanced" → "Add Environment Variable" and add:
