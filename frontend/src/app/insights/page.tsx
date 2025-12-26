@@ -14,12 +14,12 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
-import { Header } from '@/components/layout/header';
-import { Footer } from '@/components/layout/footer';
-import { BuyMeCoffee } from '@/components/buy-me-coffee';
-import { useInsights, useFriends } from '@/lib/api';
-import { formatCurrency, cn } from '@/lib/utils';
-import { CardSkeleton } from '@/components/ui/skeleton';
+import { Header } from '../../components/layout/header';
+import { Footer } from '../../components/layout/footer';
+import { BuyMeCoffee } from '../../components/buy-me-coffee';
+import { useInsights, useFriends } from '../../lib/api';
+import { formatCurrency, cn } from '../../lib/utils';
+import { CardSkeleton } from '../../components/ui/skeleton';
 
 export default function InsightsPage() {
   const { insights, isLoading } = useInsights();

@@ -3,14 +3,14 @@
 import { motion } from 'framer-motion';
 import { Users, ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react';
 import Link from 'next/link';
-import { Header } from '@/components/layout/header';
-import { Footer } from '@/components/layout/footer';
-import { BuyMeCoffee } from '@/components/buy-me-coffee';
-import { useInsights } from '@/lib/api';
-import { formatCurrency, cn, getBalanceColor } from '@/lib/utils';
-import { TableSkeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
+import { Header } from '../../components/layout/header';
+import { Footer } from '../../components/layout/footer';
+import { BuyMeCoffee } from '../../components/buy-me-coffee';
+import { useInsights } from '../../lib/api';
+import { formatCurrency, cn, getBalanceColor } from '../../lib/utils';
+import { TableSkeleton } from '../../components/ui/skeleton';
+import { Button } from '../../components/ui/button';
+import { Progress } from '../../components/ui/progress';
 
 export default function GroupsPage() {
   const { insights, isLoading } = useInsights();

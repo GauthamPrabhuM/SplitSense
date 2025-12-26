@@ -3,13 +3,13 @@
 import { motion } from 'framer-motion';
 import { User, ArrowLeft, TrendingUp, TrendingDown, Send, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
-import { Header } from '@/components/layout/header';
-import { Footer } from '@/components/layout/footer';
-import { BuyMeCoffee } from '@/components/buy-me-coffee';
-import { useFriends, useInsights } from '@/lib/api';
-import { formatCurrency, cn, getBalanceColor, getInitials } from '@/lib/utils';
-import { TableSkeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
+import { Header } from '../../components/layout/header';
+import { Footer } from '../../components/layout/footer';
+import { BuyMeCoffee } from '../../components/buy-me-coffee';
+import { useFriends, useInsights } from '../../lib/api';
+import { formatCurrency, cn, getBalanceColor, getInitials } from '../../lib/utils';
+import { TableSkeleton } from '../../components/ui/skeleton';
+import { Button } from '../../components/ui/button';
 
 export default function FriendsPage() {
   const { friends: friendBalances, isLoading } = useFriends();

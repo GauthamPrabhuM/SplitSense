@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Users, User, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
-import { cn, formatCurrency, getBalanceColor, getInitials } from '@/lib/utils';
-import type { GroupBreakdown, PersonBalance, FrictionPerson, TopGroup } from '@/types/api';
-import type { FriendBalance } from '@/lib/api';
+import { cn, formatCurrency, getBalanceColor, getInitials } from '../../lib/utils';
+import type { GroupBreakdown, PersonBalance, FrictionPerson, TopGroup } from '../../types/api';
+import type { FriendBalance } from '../../lib/api';
 
 interface GroupListProps {
   groups: TopGroup[] | GroupBreakdown[];

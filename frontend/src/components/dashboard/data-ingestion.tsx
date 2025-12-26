@@ -3,10 +3,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, Key, CheckCircle2, AlertCircle, Loader2, FileUp, X, Lock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ingestFromAPI, ingestFromFile, checkOAuthAvailable, initiateOAuthLogin } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { ingestFromAPI, ingestFromFile, checkOAuthAvailable, initiateOAuthLogin } from '../../lib/api';
+import { cn } from '../../lib/utils';
 
 interface DataIngestionProps {
   onSuccess: () => void;

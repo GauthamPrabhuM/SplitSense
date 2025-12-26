@@ -2,13 +2,13 @@
 
 import { motion } from 'framer-motion';
 import { Coffee, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from './ui/button';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
+} from './ui/tooltip';
 
 const BUY_ME_A_COFFEE_URL = 'https://buymeacoffee.com/gauthamprabhum';
 

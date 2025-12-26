@@ -2,13 +2,13 @@
 
 import { motion } from 'framer-motion';
 import { LucideIcon, TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
-import { cn, formatCurrency, getBalanceColor } from '@/lib/utils';
+import { cn, formatCurrency, getBalanceColor } from '../../lib/utils';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
+} from '../ui/tooltip';
 
 interface StatCardProps {
   title: string;

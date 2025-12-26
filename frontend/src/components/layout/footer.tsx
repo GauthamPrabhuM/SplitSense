@@ -1,5 +1,5 @@
 import { Github, Heart } from 'lucide-react';
-import { BuyMeCoffee } from '@/components/buy-me-coffee';
+import { BuyMeCoffee } from '../buy-me-coffee';
 
 export function Footer() {
   return (

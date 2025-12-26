@@ -18,8 +18,8 @@ import {
   Legend,
 } from 'recharts';
 import { TrendingUp, TrendingDown } from 'lucide-react';
-import { cn, formatCurrency, formatCompactNumber } from '@/lib/utils';
-import type { SpendingInsight, BalanceInsight, CategoryBreakdown, GroupBreakdown, TopGroup } from '@/types/api';
+import { cn, formatCurrency, formatCompactNumber } from '../../lib/utils';
+import type { SpendingInsight, BalanceInsight, CategoryBreakdown, GroupBreakdown, TopGroup } from '../../types/api';
 
 const CHART_COLORS = [
   'hsl(238, 84%, 67%)',   // Primary

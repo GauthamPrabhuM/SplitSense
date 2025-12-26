@@ -14,18 +14,18 @@ import {
   FileText,
   Download,
 } from 'lucide-react';
-import { Header } from '@/components/layout/header';
-import { Footer } from '@/components/layout/footer';
-import { BuyMeCoffee } from '@/components/buy-me-coffee';
-import { StatCard, BalanceCard } from '@/components/dashboard/stat-card';
-import { SpendingChart, BalanceChart, CategoryChart, GroupChart } from '@/components/dashboard/charts';
-import { GroupList, FriendList, FrictionList } from '@/components/dashboard/lists';
-import { DataIngestion } from '@/components/dashboard/data-ingestion';
-import { CardSkeleton, ChartSkeleton, TableSkeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useInsights, useFriends } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { Header } from '../components/layout/header';
+import { Footer } from '../components/layout/footer';
+import { BuyMeCoffee } from '../components/buy-me-coffee';
+import { StatCard, BalanceCard } from '../components/dashboard/stat-card';
+import { SpendingChart, BalanceChart, CategoryChart, GroupChart } from '../components/dashboard/charts';
+import { GroupList, FriendList, FrictionList } from '../components/dashboard/lists';
+import { DataIngestion } from '../components/dashboard/data-ingestion';
+import { CardSkeleton, ChartSkeleton, TableSkeleton } from '../components/ui/skeleton';
+import { Button } from '../components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { useInsights, useFriends } from '../lib/api';
+import { formatCurrency, formatDate } from '../lib/utils';
 
 export default function DashboardPage() {
   const { insights, isLoading, isError, refresh } = useInsights();
