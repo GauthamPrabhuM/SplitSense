@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 from pydantic import BaseModel
 import logging
 
@@ -301,12 +302,6 @@ def process_data(
         friction=friction,
         data_summary=data_summary,
     )
-
-
-@app.get("/", response_class=HTMLResponse)
-async def dashboard():
-    """Serve the dashboard HTML"""
-    return read_dashboard_html()
 
 
 def read_dashboard_html() -> str:
@@ -924,6 +919,43 @@ async def generate_analytics_report():
             'Content-Disposition': 'attachment; filename="splitsense_report.pdf"'
         }
     )
+
+
+# Serve Next.js frontend static files (production)
+# MUST be last - after all API routes are defined
+frontend_out = Path("frontend/out")
+
+if frontend_out.exists():
+    # Mount static files from Next.js export (if _next directory exists)
+    next_static = frontend_out / "_next"
+    if next_static.exists():
+        app.mount("/_next", StaticFiles(directory=str(next_static)), name="next_static")
+    
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        """Serve Next.js frontend pages (catch-all route - must be last)"""
+        # Don't intercept API/auth/docs routes
+        if full_path.startswith("api/") or full_path.startswith("auth/") or full_path.startswith("docs"):
+            raise HTTPException(status_code=404)
+        
+        # Try to serve the requested file
+        file_path = frontend_out / full_path
+        if file_path.exists() and file_path.is_file() and file_path.suffix in [".html", ".js", ".css", ".json", ".ico", ".png", ".jpg", ".svg", ".woff", ".woff2", ".ttf", ".eot"]:
+            return FileResponse(str(file_path))
+        
+        # For client-side routes, serve index.html
+        index_file = frontend_out / "index.html"
+        if index_file.exists():
+            return FileResponse(str(index_file))
+        
+        # Fallback
+        return read_dashboard_html()
+else:
+    # Development fallback
+    @app.get("/", response_class=HTMLResponse)
+    async def dashboard():
+        """Serve the dashboard HTML (fallback for development)"""
+        return read_dashboard_html()
 
 
 if __name__ == "__main__":
