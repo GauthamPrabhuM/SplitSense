@@ -5,6 +5,7 @@ services:
     env: python
     plan: free  # Free tier - 750 hours/month, spins down after 15 min
     region: oregon  # Choose closest region
+    # Python version specified in runtime.txt (3.11.9) - required for pandas 2.1.3 compatibility
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1
     healthCheckPath: /api/health

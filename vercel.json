@@ -1,8 +1,8 @@
 {
-  "buildCommand": "npm install && npm run build",
-  "outputDirectory": ".next",
-  "framework": "nextjs",
-  "installCommand": "npm install",
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/.next",
+  "installCommand": "cd frontend && npm install",
+  "framework": null,
   "rewrites": [
     {
       "source": "/api/:path*",
@@ -12,9 +12,6 @@
       "source": "/auth/:path*",
       "destination": "https://splitsense-backend.onrender.com/auth/:path*"
     }
-  ],
-  "env": {
-    "NEXT_PUBLIC_API_URL": "https://splitsense-backend.onrender.com"
-  }
+  ]
 }
 
